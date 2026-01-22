@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15
+    container_name: sf6_db
+    # 個別の環境変数を削除し、.envファイルから一括読み込み
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  scraper:
+    build: ./scraper
+    container_name: sf6_scraper
+    # こちらも.envから読み込み（DATABASE_URL, TARGET_PLAYER_ID, MY_PLAYER_NAME）
+    env_file:
+      - .env
+    volumes:
+      - ./scraper:/app
+    ports:
+      - "8501:8501" # Streamlit管理画面用
+    depends_on:
+      - db
+    restart: always
+
+  metabase:
+    image: metabase/metabase
+    container_name: sf6_metabase
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./metabase-data:/metabase-data
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  postgres_data:

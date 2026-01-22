@@ -1,0 +1,35 @@
+# --- セキュリティ・個人情報 ---
+# ログイン情報が含まれるクッキーファイル（最重要！）
+auth/local_cookies.json
+local_cookies.json
+
+# データベースの接続情報（パスワード等）
+.env
+# もしdocker-compose.ymlに直接パスワードを書いている場合は、env_file形式への移行を推奨します
+
+# --- スクレイピング・デバッグ用 ---
+# 画面キャプチャ（プレイヤー名や対戦相手が写っているため）
+*.png
+debug_full_screen.png
+
+# 実行ログ（プレイヤー名やIDが記録されている可能性があるため）
+*.log
+scraper.log
+
+# --- Python環境 ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# --- OS・エディタ設定 ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Metabaseの内部データ ---
+metabase-data/
+# もしファイル名が固定なら以下も
+metabase.db.mv.db
+metabase.db.trace.db
