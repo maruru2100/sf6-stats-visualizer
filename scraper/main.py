@@ -11,14 +11,11 @@ import random
 import threading
 
 # --- 1. 環境変数のバリデーション ---
-# 個人情報をコードに含めないためのチェック
 TARGET_ID = os.getenv("TARGET_PLAYER_ID")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not TARGET_ID or not DATABASE_URL:
-    print("❌ エラー: 環境変数 'TARGET_PLAYER_ID' または 'DATABASE_URL' が設定されていません。")
-    print(".envファイルまたはDockerの環境設定を確認してください。")
-    # Streamlit上でも警告を表示するために変数は保持し、処理内で停止させる
+    print("❌ エラー: 環境変数が不足しています。")
     ENV_ERROR = True
 else:
     ENV_ERROR = False
@@ -49,23 +46,40 @@ def write_log(message):
 def init_db():
     if ENV_ERROR: return
     with engine.connect() as conn:
+        # 戦績テーブル
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS battle_results (
-                id SERIAL PRIMARY KEY, battle_id TEXT UNIQUE, played_at TIMESTAMP, mode TEXT,
+                id SERIAL PRIMARY KEY, 
+                battle_id TEXT UNIQUE, 
+                played_at TIMESTAMP, 
+                mode TEXT,
                 p1_name TEXT, p1_char TEXT, p1_mr INTEGER, p1_control TEXT, p1_result TEXT,
                 p2_name TEXT, p2_char TEXT, p2_mr INTEGER, p2_control TEXT, p2_result TEXT
             );
         """))
+        # 設定保存用テーブル（スケジュール時間を保存）
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS scraper_config (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+        """))
+        # 初回のみデフォルト時間を投入
+        conn.execute(text("""
+            INSERT INTO scraper_config (key, value) 
+            VALUES ('run_times', '09:00,21:00')
+            ON CONFLICT (key) DO NOTHING;
+        """))
         conn.commit()
 
-# --- 3. 解析ロジック ---
+# --- 3. 解析ロジック (変更なし) ---
 def scrape_sf6(user_code, max_pages=5):
     if not user_code:
         write_log("❌ エラー: ユーザーIDが指定されていません。")
         return False
 
     target_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/battlelog/rank#profile_nav"
-    write_log(f"🚀 スクレイピング開始 (Target: {user_code}, 遡り: {max_pages}ページ)")
+    write_log(f"🚀 スクレイピング開始 (ID: {user_code}, 遡り: {max_pages}ページ)")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
@@ -79,7 +93,6 @@ def scrape_sf6(user_code, max_pages=5):
         try:
             page.goto(target_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
-
             # Cookiebotポップアップ排除
             page.evaluate("""() => {
                 const ids = ['#CybotCookiebotDialog', '#CybotCookiebotDialogBodyUnderlay'];
@@ -94,7 +107,6 @@ def scrape_sf6(user_code, max_pages=5):
                 write_log(f"📑 {current_p}ページ目をスキャン中...")
                 time.sleep(2)
                 
-                # 堅牢な抽出JS
                 page_data = page.evaluate("""
                     () => {
                         const results = [];
@@ -143,7 +155,6 @@ def scrape_sf6(user_code, max_pages=5):
                     else:
                         break
 
-            # 保存
             new_count = 0
             if all_found_data and not ENV_ERROR:
                 with engine.connect() as conn:
@@ -175,58 +186,134 @@ def scrape_sf6(user_code, max_pages=5):
 
 # --- 4. バックグラウンド監視スレッド ---
 def background_worker():
-    # 起動時に環境変数から取得
-    target_id = os.getenv("TARGET_PLAYER_ID")
-    if not target_id:
-        print("⚠️ TARGET_PLAYER_ID未設定のため、自動巡回は無効です。")
-        return
-
-    RUN_TIMES = ["09:00", "21:00"]
-    print(f"📢 監視開始 (ID: {target_id}, 実行: {RUN_TIMES})")
+    # 最後に実行した「日付+時間」を記録する変数
     last_run = ""
+    
     while True:
+        if ENV_ERROR: break
+        
         now_dt = get_now_jst()
         now_str = now_dt.strftime("%H:%M")
         today_str = now_dt.strftime("%Y-%m-%d")
+        current_time_total_minutes = now_dt.hour * 60 + now_dt.minute
         
-        if now_str in RUN_TIMES and last_run != today_str + now_str:
-            scrape_sf6(target_id, max_pages=2)
-            last_run = today_str + now_str
-        time.sleep(30)
+        # 1. 毎回最新のスケジュールをDBから読み込む
+        try:
+            with engine.connect() as conn:
+                res = conn.execute(text("SELECT value FROM scraper_config WHERE key = 'run_times'"))
+                row = res.fetchone()
+                # カンマ区切りの文字列をリストに変換
+                raw_times = row[0].split(",") if row else ["09:00", "21:00"]
+                
+                # 「9:00」を「09:00」に補正する処理
+                run_times = []
+                for t in raw_times:
+                    t = t.strip()
+                    if len(t) == 4 and ":" in t: # 9:00 などの場合
+                        t = "0" + t
+                    run_times.append(t)
+        except:
+            # DB接続エラー等の場合はデフォルト値を使用
+            run_times = ["09:00", "21:00"]
+
+        # 2. 実行すべき時間があるかチェック
+        should_run = False
+        matched_time_str = ""
+
+        for t_str in run_times:
+            try:
+                # 設定時刻(09:00など)を数値（分）に変換
+                h, m = map(int, t_str.split(":"))
+                target_total_minutes = h * 60 + m
+                
+                # 判定条件:
+                # ① 現在時刻が設定時刻を過ぎている（または同時）
+                # ② かつ、現在時刻が設定時刻から1時間以内（古い設定を無視するため）
+                # ③ かつ、今日その設定時刻でまだ実行していない
+                is_time_to_go = current_time_total_minutes >= target_total_minutes
+                is_not_too_old = current_time_total_minutes < target_total_minutes + 60
+                has_not_run_today = last_run != today_str + t_str
+                
+                if is_time_to_go and is_not_too_old and has_not_run_today:
+                    should_run = True
+                    matched_time_str = t_str
+                    break
+            except:
+                continue # 変な形式の入力は無視して次へ
+
+        # 3. 実行
+        if should_run:
+            write_log(f"⏰ 定期巡回スケジュールに合致しました (設定: {matched_time_str})")
+            # TARGET_ID（環境変数の値）を使用して実行
+            scrape_sf6(TARGET_ID, max_pages=2)
+            # 実行済みスタンプを記録（例: "2024-05-2109:00"）
+            last_run = today_str + matched_time_str
+            
+        # 4. 待機（1分間隔）
+        time.sleep(60)
 
 # --- 5. Streamlit UI ---
 st.set_page_config(page_title="SF6 Stats Manager", layout="wide")
 
 if ENV_ERROR:
-    st.error("❌ 環境変数が設定されていません。'.env' ファイルを確認してください。")
+    st.error("❌ 環境変数が設定されていません。")
     st.stop()
 
 init_db()
 
+# 左側のサイドバーでスケジュール設定
+with st.sidebar:
+    st.title("⚙️ 設定")
+    
+    # 現在のスケジュール取得
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT value FROM scraper_config WHERE key = 'run_times'"))
+        row = res.fetchone()
+        db_times = row[0] if row else "09:00,21:00"
+
+    st.subheader("⏰ 自動巡回スケジュール")
+    new_times = st.text_input("実行時間 (24h形式をカンマ区切り)", value=db_times, help="例: 09:00,15:30,22:00")
+    
+    if st.button("設定を保存", use_container_width=True):
+        with engine.connect() as conn:
+            conn.execute(text("UPDATE scraper_config SET value = :val WHERE key = 'run_times'"), {"val": new_times})
+            conn.commit()
+        st.success("✅ スケジュールを保存しました")
+        time.sleep(1)
+        st.rerun()
+
+    st.divider()
+    st.caption("※このWeb画面を閉じていても、Dockerが動いていれば自動取得は継続されます。")
+
+# バックグラウンドスレッド起動
 if "worker_thread_started" not in st.session_state:
-    already_running = any(t.name == "BackgroundWorker" for t in threading.enumerate())
-    if not already_running:
+    if not any(t.name == "BackgroundWorker" for t in threading.enumerate()):
         worker = threading.Thread(target=background_worker, name="BackgroundWorker", daemon=True)
         worker.start()
     st.session_state.worker_thread_started = True
 
+# メインコンテンツ
 st.title("🥊 SF6 戦績収集システム")
 
 col1, col2 = st.columns([1, 1])
 with col1:
-    user_id = st.text_input("ターゲットユーザーID", value=TARGET_ID)
-    max_p = st.slider("巡回ページ数", 1, 100, 5)
+    st.subheader("手動実行")
+    # TARGET_IDを初期値にしつつ、画面で一時的に変更して実行も可能
+    current_target = st.text_input("ターゲットユーザーID", value=TARGET_ID)
+    max_p = st.slider("巡回ページ数", 1, 50, 5)
     
     if st.button("🚀 今すぐ最新戦績を取得", use_container_width=True):
-        scrape_sf6(user_id, max_pages=max_p)
+        scrape_sf6(current_target, max_pages=max_p)
         st.rerun()
 
     st.divider()
+    st.subheader("ログ")
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             logs = f.readlines()
-            st.text_area("実行ログ (最新50件)", value="".join(logs[-50:]), height=300)
+            st.text_area("実行履歴 (最新50件)", value="".join(logs[-50:]), height=300)
 
 with col2:
+    st.subheader("前回の状態")
     if os.path.exists(FULL_SCREENSHOT_PATH):
-        st.image(FULL_SCREENSHOT_PATH, caption="前回の取得完了画面")
+        st.image(FULL_SCREENSHOT_PATH, caption="前回のブラウザ画面")

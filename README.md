@@ -17,16 +17,21 @@
 - **Docker / Docker Compose**: 環境構築の共通化
 
 ## 🚀 セットアップ
+- 以下の説明はWindows基準です。他OSの方は適宜読み替えてください。
 
 ### 1. リポジトリの準備
+```cmd
 git clone 本リポジトリ
 cd sf6-stats-manager
+```
 
 ### 2. 環境変数の設定
 .env.example をコピーして .env を作成し、必要な情報を記入してください。
 ※ .env は Git 管理から除外（.gitignore）してください。
 
-cp .env.example .env
+```cmd
+copy .env.example .env
+```
 
 - TARGET_PLAYER_ID: あなたの10桁のユーザーID
 - MY_PLAYER_NAME: あなたのプレイヤー名（集計用）
@@ -37,7 +42,9 @@ Playwright用のクッキー情報（local_cookies.json）を ./auth/ フォル�
 ### 4. 起動
 Dockerを使用してすべてのコンテナを起動します。
 
+```cmd
 docker-compose up -d
+```
 
 ## 📊 アクセス方法
 - **管理画面 (Streamlit)**: http://localhost:8501
