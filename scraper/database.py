@@ -17,6 +17,7 @@ def init_db():
                 p2_name TEXT, p2_char TEXT, p2_mr INTEGER, p2_control TEXT, p2_result TEXT
             );
         """))
+
         # 2. プレイスタイル統計テーブル
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS player_stats (
@@ -34,12 +35,38 @@ def init_db():
             );
         """))
 
+        # --- 【追加】player_stats への player_name カラム後付け処理 ---
+        try:
+            # カラムが存在するか確認
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='player_stats' AND column_name='player_name';
+            """))
+            if not result.fetchone():
+                # カラムがなければ追加
+                conn.execute(text("ALTER TABLE player_stats ADD COLUMN player_name TEXT;"))
+                print("✅ player_stats テーブルに player_name カラムを追加しました。")
+        except Exception as e:
+            print(f"⚠️ カラム追加でエラーが発生しました（無視して続行）: {e}")
+
+        # 3. 設定保存用テーブル
+        conn.execute(text("CREATE TABLE IF NOT EXISTS scraper_config (key TEXT PRIMARY KEY, value TEXT);"))
+        conn.execute(text("INSERT INTO scraper_config (key, value) VALUES ('run_times', '09:00,21:00') ON CONFLICT DO NOTHING;"))
+
+        # 4. 【追加】ターゲットユーザー管理テーブル (これがないと main.py がエラーになります)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS target_users (
+                user_code TEXT PRIMARY KEY,
+                player_name TEXT,
+                note TEXT,
+                is_active BOOLEAN DEFAULT TRUE
+            );
+        """))
+
         # コメント付与
         for target, comment in COLUMN_COMMENTS:
             try: conn.execute(text(f"COMMENT ON COLUMN {target} IS '{comment}';"))
             except: pass
 
-        # 3. 設定保存用テーブル
-        conn.execute(text("CREATE TABLE IF NOT EXISTS scraper_config (key TEXT PRIMARY KEY, value TEXT);"))
-        conn.execute(text("INSERT INTO scraper_config (key, value) VALUES ('run_times', '09:00,21:00') ON CONFLICT DO NOTHING;"))
         conn.commit()

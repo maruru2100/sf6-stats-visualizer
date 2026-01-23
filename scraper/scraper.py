@@ -6,10 +6,12 @@ from playwright.sync_api import sync_playwright
 from config import COOKIE_PATH, FULL_SCREENSHOT_PATH
 from database import engine
 
-def scrape_performance_data(page, user_id, write_log_func):
+def scrape_performance_data(page, user_id, player_name, write_log_func):
     """【実績】タブから詳細統計を取得・保存"""
     try:
-        write_log_func(f"📊 統計解析開始 (ID: {user_id})")
+        write_log_func(f"📊 統計解析開始 (ID: {user_id} / {player_name})")
+        
+        # 動いていたセレクターを維持
         perf_tab = page.locator('li:has-text("実績"), button:has-text("実績")').first
         if perf_tab.is_visible():
             perf_tab.click()
@@ -59,19 +61,21 @@ def scrape_performance_data(page, user_id, write_log_func):
                 return results;
             }
         """)
+
         with engine.connect() as conn:
             conn.execute(text("""
                 INSERT INTO player_stats (
-                    user_id, recorded_at, d_parry_pct, d_impact_pct, d_od_pct, d_rush_p_pct, d_rush_c_pct, d_reversal_pct,
+                    user_id, player_name, recorded_at, d_parry_pct, d_impact_pct, d_od_pct, d_rush_p_pct, d_rush_c_pct, d_reversal_pct,
                     sa1_pct, sa2_pct, sa3_pct, ca_pct, impact_win, impact_pc_win, impact_counter_win,
                     impact_lose, impact_pc_lose, impact_counter_lose, just_parry_count,
                     throw_win, throw_lose, throw_escape, stun_win, stun_lose, wall_push_sec, wall_pushed_sec
                 ) VALUES (
-                    :uid, CURRENT_DATE, :d_parry_pct, :d_impact_pct, :d_od_pct, :d_rush_p_pct, :d_rush_c_pct, :d_reversal_pct,
+                    :uid, :pname, CURRENT_DATE, :d_parry_pct, :d_impact_pct, :d_od_pct, :d_rush_p_pct, :d_rush_c_pct, :d_reversal_pct,
                     :sa1_pct, :sa2_pct, :sa3_pct, :ca_pct, :imp_win, :imp_pc_win, :imp_returned_win,
                     :imp_lose, :imp_pc_lose, :imp_returned_lose, :just_parry,
                     :throw_win, :throw_lose, :throw_escape, :stun_win, :stun_lose, :wall_push, :wall_pushed
                 ) ON CONFLICT (user_id, recorded_at) DO UPDATE SET
+                    player_name=EXCLUDED.player_name,
                     d_parry_pct=EXCLUDED.d_parry_pct, d_impact_pct=EXCLUDED.d_impact_pct, d_od_pct=EXCLUDED.d_od_pct,
                     d_rush_p_pct=EXCLUDED.d_rush_p_pct, d_rush_c_pct=EXCLUDED.d_rush_c_pct, d_reversal_pct=EXCLUDED.d_reversal_pct,
                     sa1_pct=EXCLUDED.sa1_pct, sa2_pct=EXCLUDED.sa2_pct, sa3_pct=EXCLUDED.sa3_pct, ca_pct=EXCLUDED.ca_pct,
@@ -80,19 +84,18 @@ def scrape_performance_data(page, user_id, write_log_func):
                     just_parry_count=EXCLUDED.just_parry_count, throw_win=EXCLUDED.throw_win, throw_lose=EXCLUDED.throw_lose,
                     throw_escape=EXCLUDED.throw_escape, stun_win=EXCLUDED.stun_win, stun_lose=EXCLUDED.stun_lose,
                     wall_push_sec=EXCLUDED.wall_push_sec, wall_pushed_sec=EXCLUDED.wall_pushed_sec;
-            """), {**stats, "uid": user_id})
+            """), {**stats, "uid": user_id, "pname": player_name})
             conn.commit()
         write_log_func("✅ 統計データ保存完了")
     except Exception as e: write_log_func(f"⚠️ 統計取得エラー: {e}")
 
-def scrape_sf6(user_code, write_log_func, max_pages=5):
+def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
     if not user_code: return False
     play_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/play"
     log_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/battlelog/rank#profile_nav"
-    write_log_func(f"🚀 スクレイピング開始 (ID: {user_code}, 遡り: {max_pages}ページ)")
+    write_log_func(f"🚀 スクレイピング開始 (ID: {user_code}, 名前: {player_name})")
 
     with sync_playwright() as p:
-        # ご指定通りの引数
         browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
         context = browser.new_context(
             storage_state=COOKIE_PATH, viewport={'width': 1280, 'height': 1200},
@@ -102,8 +105,10 @@ def scrape_sf6(user_code, write_log_func, max_pages=5):
         try:
             page.goto(play_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
+            # Cookieダイアログ削除
             page.evaluate("() => { document.querySelectorAll('#CybotCookiebotDialog, [class*=\"praise_\"]').forEach(el => el.remove()); }")
-            scrape_performance_data(page, user_code, write_log_func)
+            
+            scrape_performance_data(page, user_code, player_name, write_log_func)
 
             page.goto(log_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
@@ -148,6 +153,7 @@ def scrape_sf6(user_code, write_log_func, max_pages=5):
                 with engine.connect() as conn:
                     for it in all_found_data:
                         dt = datetime.datetime.strptime(it['date'], "%Y/%m/%d %H:%M")
+                        # ここでSQLを修正
                         r = conn.execute(text("""
                             INSERT INTO battle_results (battle_id, played_at, mode, p1_name, p1_char, p1_mr, p1_control, p1_result, p2_name, p2_char, p2_mr, p2_control, p2_result)
                             VALUES (:bid, :pat, 'RankMatch', :p1n, :p1c, :p1m, :p1ctrl, :p1r, :p2n, :p2c, :p2m, :p2ctrl, :p2r)
@@ -156,11 +162,8 @@ def scrape_sf6(user_code, write_log_func, max_pages=5):
                         if r.rowcount > 0: new_count += 1
                     conn.commit()
             write_log_func(f"🏁 完了。新規戦績: {new_count}件")
-            page.screenshot(path=FULL_SCREENSHOT_PATH, full_page=True)
             return True
         except Exception as e:
             write_log_func(f"💥 エラー: {e}")
-            try: page.screenshot(path="./debug_error.png", full_page=True)
-            except: pass
             return False
         finally: browser.close()
