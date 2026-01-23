@@ -72,7 +72,7 @@ def init_db():
         """))
         conn.commit()
 
-# --- 3. 解析ロジック (変更なし) ---
+# --- 3. 解析ロジック ---
 def scrape_sf6(user_code, max_pages=5):
     if not user_code:
         write_log("❌ エラー: ユーザーIDが指定されていません。")
@@ -93,12 +93,19 @@ def scrape_sf6(user_code, max_pages=5):
         try:
             page.goto(target_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
-            # Cookiebotポップアップ排除
+
+            # ポップアップ（Cookiebotや称賛モーダル）を強制排除
             page.evaluate("""() => {
-                const ids = ['#CybotCookiebotDialog', '#CybotCookiebotDialogBodyUnderlay'];
-                ids.forEach(id => {
-                    const el = document.querySelector(id);
-                    if (el) el.remove();
+                const selectors = [
+                    '#CybotCookiebotDialog', 
+                    '#CybotCookiebotDialogBodyUnderlay',
+                    '[class*="praise_praise_modal"]', 
+                    '[class*="praise_current"]',
+                    '[class*="praise_situation"]'
+                ];
+                selectors.forEach(sel => {
+                    const elements = document.querySelectorAll(sel);
+                    elements.forEach(el => el.remove());
                 });
                 document.body.style.overflow = 'auto'; 
             }""")
@@ -149,12 +156,13 @@ def scrape_sf6(user_code, max_pages=5):
                 if current_p < max_pages:
                     next_btn = page.locator("li.next:not(.disabled)").first
                     if next_btn.is_visible():
-                        next_btn.click()
+                        next_btn.click(timeout=5000)
                         page.wait_for_load_state("networkidle")
                         time.sleep(random.uniform(3.0, 5.0))
                     else:
                         break
 
+            # 保存
             new_count = 0
             if all_found_data and not ENV_ERROR:
                 with engine.connect() as conn:
@@ -175,11 +183,17 @@ def scrape_sf6(user_code, max_pages=5):
                     conn.commit()
             
             write_log(f"🏁 処理完了。新規保存: {new_count}件")
-            page.screenshot(path=FULL_SCREENSHOT_PATH)
+            
+            # 🌟 修正：full_page=True を追加してページ全体を撮影
+            page.screenshot(path=FULL_SCREENSHOT_PATH, full_page=True)
             return True
 
         except Exception as e:
             write_log(f"💥 エラー: {str(e)}")
+            try:
+                # 🌟 エラー時も全体を撮っておくと原因が分かりやすい
+                page.screenshot(path="./debug_error.png", full_page=True)
+            except: pass
             return False
         finally:
             browser.close()
