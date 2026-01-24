@@ -7,7 +7,7 @@ import random
 from sqlalchemy import text
 from config import TARGET_ID, DATABASE_URL, ENV_ERROR, JST, LOG_FILE, FULL_SCREENSHOT_PATH
 from database import init_db, engine
-from scraper import scrape_sf6
+from scraper import scrape_sf6, update_public_url
 
 # --- 初期化 ---
 init_db()
@@ -28,7 +28,6 @@ def run_all_users(max_pages=2):
     """【順次実行】登録されている有効なユーザー全員を順番に実行"""
     try:
         with engine.connect() as conn:
-            # 修正：player_nameも取得して渡す
             users = conn.execute(text("SELECT user_code, player_name FROM target_users WHERE is_active = TRUE")).fetchall()
         
         if not users:
@@ -37,11 +36,10 @@ def run_all_users(max_pages=2):
 
         write_log(f"👥 計 {len(users)} 名の巡回を順次開始します。")
         for i, u in enumerate(users):
-            # 修正：最新のscraper引数に合わせて player_name を渡す
             scrape_sf6(u.user_code, u.player_name, write_log, max_pages=max_pages)
             
             if i < len(users) - 1:
-                wait_sec = random.randint(15, 30) # 負荷軽減のための休憩
+                wait_sec = random.randint(15, 30)
                 write_log(f"☕ 負荷軽減のため {wait_sec}秒 待機して次のユーザーへ移ります...")
                 time.sleep(wait_sec)
         write_log("✨ 全員の巡回が終了しました。")
@@ -92,9 +90,17 @@ if "worker_thread_started" not in st.session_state:
 
 with st.sidebar:
     st.title("⚙️ 設定")
+    
+    # 外部公開管理セクション
+    st.subheader("🌐 外部公開管理")
+    if st.button("🔄 公開URLを最新に更新", use_container_width=True, help="Cloudflare Tunnelから最新のランダムURLを取得してDBを更新します"):
+        # ブラウザを起動せず、URL取得ロジックだけを動かす
+        update_public_url(write_log)
+        st.success("処理が完了しました。ログを確認してください。")
+    st.divider()
+
     st.subheader("👥 ターゲットユーザー管理")
     with st.expander("ユーザーを追加/更新"):
-        # keyを設定して、プログラムから値を制御できるようにする
         new_uid = st.text_input("ユーザーコード (10桁)", key="input_uid")
         new_pname = st.text_input("表示名", key="input_pname")
         new_note = st.text_area("メモ", key="input_note")
@@ -110,16 +116,13 @@ with st.sidebar:
                         DO UPDATE SET player_name=EXCLUDED.player_name, note=EXCLUDED.note
                     """), {"uid": new_uid, "name": new_pname, "note": new_note})
                     conn.commit()
-                
                 st.session_state.input_uid = ""
                 st.session_state.input_pname = ""
                 st.session_state.input_note = ""
-                
                 st.success("✅ 保存しました")
                 time.sleep(1)
-                st.rerun() # 再描画して空のUIを表示
+                st.rerun()
 
-    # スケジュール管理
     try:
         with engine.connect() as conn:
             res = conn.execute(text("SELECT value FROM scraper_config WHERE key = 'run_times'"))
@@ -136,7 +139,7 @@ with st.sidebar:
         st.success("✅ 保存完了"); time.sleep(1); st.rerun()
 
 st.title("🥊 SF6 戦績＆統計収集システム")
-col1, col2 = st.columns([1, 2]) # ログを見やすくするため比率を変更
+col1, col2 = st.columns([1, 2])
 
 with col1:
     st.subheader("実行")
@@ -150,7 +153,6 @@ with col1:
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🚀 選択ユーザーのみ実行", use_container_width=True):
-                # 修正：引数に player_name を追加
                 scrape_sf6(selected_u.user_code, selected_u.player_name, write_log, max_pages=max_p)
                 st.rerun()
         with c_btn2:
@@ -170,7 +172,6 @@ with col1:
 with col2:
     st.subheader("登録ユーザー一覧")
     with engine.connect() as conn:
-        # SQLの実行結果を明示的にDataFrame形式で見やすく表示
         df_users = conn.execute(text("SELECT player_name as 名前, user_code as ID, note as メモ, is_active as 有効 FROM target_users")).fetchall()
         if df_users:
             st.table(df_users)

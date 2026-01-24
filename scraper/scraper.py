@@ -11,6 +11,7 @@ from database import engine
 
 def update_public_url(write_log_func):
     """Cloudflare TunnelのメトリクスからURLを確実に抽出してDBに保存する"""
+    # 接続先をコンテナ名に固定
     target_url = "http://sf6_tunnel:2000/metrics"
     
     for i in range(6):
@@ -20,12 +21,9 @@ def update_public_url(write_log_func):
             
             if response.status_code == 200:
                 text_data = response.text
-                
-                # 確認したパターンで検索
-                # cloudflared_tunnel_user_hostnames_counts{userHostname="URL"} 1
                 if 'cloudflared_tunnel_user_hostnames_counts' in text_data:
+                    # 目視確認されたパターン: userHostname="https://xxx.trycloudflare.com"
                     match = re.search(r'userHostname="(https://[^"]+)"', text_data)
-                    
                     if match:
                         public_url = match.group(1)
                         with engine.begin() as conn:
@@ -35,14 +33,11 @@ def update_public_url(write_log_func):
                             )
                         write_log_func(f"✅ 公開URLをDBに更新しました: {public_url}")
                         return True
-                
-                write_log_func("ℹ️ Tunnel準備中... URL行の出現を待機しています。")
+                write_log_func("ℹ️ Tunnel準備中... URL発行を待機しています。")
             else:
                 write_log_func(f"⚠️ HTTPエラー: {response.status_code}")
-        
         except Exception as e:
             write_log_func(f"❌ 接続エラー: {str(e)}")
-        
         time.sleep(10)
     
     write_log_func("⚠️ タイムアウト: URLが発行されませんでした。")
