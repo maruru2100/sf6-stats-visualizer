@@ -63,6 +63,28 @@ docker-compose up -d flyway
 - **分析画面 (Metabase)**: http://localhost:3000
   - 初回起動時にPostgreSQL（ホスト名: db）との接続設定を行ってください。
 
+## 🌐 外部共有モード (オプション)
+自グループのメンバーにMetabaseを公開したい場合は、以下の手順で起動してください。
+
+1. **公開モードで起動**
+   ```bash
+   docker-compose --profile external up -d
+   ```
+2. **URLの確認**  
+  スクレイピングを1度実行（Streamlitの「今すぐ取得」等）すると、自動的に最新のURLがDBに保存されます。  
+  以下のSQLで、常に最新のURLを確認できます。
+   ```sql
+   SELECT value FROM system_status WHERE key = 'public_url';
+   ```
+    ※ PCを再起動したりコンテナを上げ直すとURLが変わるため、その都度確認して共有してください。
+   
+   ---
+    ### 最終ステップ：Metabaseでの設定
+    最後に、Metabaseで以下のクエリを作成し、ダッシュボードの一番上に「テキストカード」や「単一数値」として配置してください。
+    ```sql
+    SELECT value FROM system_status WHERE key = 'public_url';
+    ```
+
 ## ⚠️ 免責事項
 - 本ツールは個人による戦績分析および学習を目的としています。
 - スクレイピングの実行は、公式サイトのサーバーに負荷をかけないよう適切な頻度（デフォルトでは1日2回）に設定されています。利用規約を遵守し、自己責任で使用してください。

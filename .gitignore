@@ -35,3 +35,6 @@ metabase.db.trace.db
 
 # --- local便利bat等 ---
 local/
+
+# --- ドメイン管理系 ---
+.cloudflared/

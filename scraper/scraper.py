@@ -1,10 +1,52 @@
 import time
 import random
 import datetime
+import requests
+import re
+import time
 from sqlalchemy import text
 from playwright.sync_api import sync_playwright
 from config import COOKIE_PATH, FULL_SCREENSHOT_PATH
 from database import engine
+
+def update_public_url(write_log_func):
+    """Cloudflare TunnelのメトリクスからURLを確実に抽出してDBに保存する"""
+    target_url = "http://sf6_tunnel:2000/metrics"
+    
+    for i in range(6):
+        try:
+            write_log_func(f"🌐 外部公開URLを確認中... (試行 {i+1}/6)")
+            response = requests.get(target_url, timeout=5)
+            
+            if response.status_code == 200:
+                text_data = response.text
+                
+                # 確認したパターンで検索
+                # cloudflared_tunnel_user_hostnames_counts{userHostname="URL"} 1
+                if 'cloudflared_tunnel_user_hostnames_counts' in text_data:
+                    match = re.search(r'userHostname="(https://[^"]+)"', text_data)
+                    
+                    if match:
+                        public_url = match.group(1)
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text("UPDATE system_status SET value = :url, updated_at = CURRENT_TIMESTAMP WHERE key = 'public_url'"),
+                                {"url": public_url}
+                            )
+                        write_log_func(f"✅ 公開URLをDBに更新しました: {public_url}")
+                        return True
+                
+                write_log_func("ℹ️ Tunnel準備中... URL行の出現を待機しています。")
+            else:
+                write_log_func(f"⚠️ HTTPエラー: {response.status_code}")
+        
+        except Exception as e:
+            write_log_func(f"❌ 接続エラー: {str(e)}")
+        
+        time.sleep(10)
+    
+    write_log_func("⚠️ タイムアウト: URLが発行されませんでした。")
+    return False
 
 def scrape_performance_data(page, user_id, player_name, write_log_func):
     """【実績】タブから詳細統計を取得・保存"""
@@ -91,6 +133,10 @@ def scrape_performance_data(page, user_id, player_name, write_log_func):
 
 def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
     if not user_code: return False
+    
+    # 公開URLの自動更新
+    update_public_url(write_log_func)
+
     play_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/play"
     log_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/battlelog/rank#profile_nav"
     write_log_func(f"🚀 スクレイピング開始 (ID: {user_code}, 名前: {player_name})")
@@ -153,7 +199,6 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
                 with engine.connect() as conn:
                     for it in all_found_data:
                         dt = datetime.datetime.strptime(it['date'], "%Y/%m/%d %H:%M")
-                        # ここでSQLを修正
                         r = conn.execute(text("""
                             INSERT INTO battle_results (battle_id, played_at, mode, p1_name, p1_char, p1_mr, p1_control, p1_result, p2_name, p2_char, p2_mr, p2_control, p2_result)
                             VALUES (:bid, :pat, 'RankMatch', :p1n, :p1c, :p1m, :p1ctrl, :p1r, :p2n, :p2c, :p2m, :p2ctrl, :p2r)
