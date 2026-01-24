@@ -13,6 +13,7 @@
 - **Python (Playwright)**: ブラウザ自動操作によるスクレイピング
 - **Streamlit**: データ収集の管理・ログ確認用GUI
 - **PostgreSQL**: 戦績データの蓄積
+- **Flyway**: DB管理
 - **Metabase**: BIツールによるデータビジュアライズ
 - **Docker / Docker Compose**: 環境構築の共通化
 
@@ -44,6 +45,16 @@ Dockerを使用してすべてのコンテナを起動します。
 
 ```cmd
 docker-compose up -d
+```
+
+### 5.停止
+```cmd
+docker-compose down
+```
+
+### 6.Flywayのみ適用させたいとき
+```
+docker-compose up -d flyway
 ```
 
 ## 📊 アクセス方法
