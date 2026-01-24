@@ -30,6 +30,8 @@ venv/
 
 # --- Metabaseの内部データ ---
 metabase-data/
-# もしファイル名が固定なら以下も
 metabase.db.mv.db
 metabase.db.trace.db
+
+# --- local便利bat等 ---
+local/
