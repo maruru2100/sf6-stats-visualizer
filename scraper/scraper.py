@@ -128,9 +128,6 @@ def scrape_performance_data(page, user_id, player_name, write_log_func):
 
 def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
     if not user_code: return False
-    
-    # 公開URLの自動更新
-    update_public_url(write_log_func)
 
     play_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/play"
     log_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/battlelog/rank#profile_nav"

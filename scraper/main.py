@@ -101,27 +101,26 @@ with st.sidebar:
 
     st.subheader("👥 ターゲットユーザー管理")
     with st.expander("ユーザーを追加/更新"):
-        new_uid = st.text_input("ユーザーコード (10桁)", key="input_uid")
-        new_pname = st.text_input("表示名", key="input_pname")
-        new_note = st.text_area("メモ", key="input_note")
-        
-        if st.button("登録/上書き"):
-            if not new_uid or not new_pname:
-                st.error("IDと表示名は必須です")
-            else:
-                with engine.connect() as conn:
-                    conn.execute(text("""
-                        INSERT INTO target_users (user_code, player_name, note) 
-                        VALUES (:uid, :name, :note) ON CONFLICT (user_code) 
-                        DO UPDATE SET player_name=EXCLUDED.player_name, note=EXCLUDED.note
-                    """), {"uid": new_uid, "name": new_pname, "note": new_note})
-                    conn.commit()
-                st.session_state.input_uid = ""
-                st.session_state.input_pname = ""
-                st.session_state.input_note = ""
-                st.success("✅ 保存しました")
-                time.sleep(1)
-                st.rerun()
+        # st.formを使用して、入力値のリセットとエラー回避を両立させる
+        with st.form("user_registration_form", clear_on_submit=True):
+            new_uid = st.text_input("ユーザーコード (10桁)")
+            new_pname = st.text_input("表示名")
+            new_note = st.text_area("メモ")
+            
+            if st.form_submit_button("登録/上書き"):
+                if not new_uid or not new_pname:
+                    st.error("IDと表示名は必須です")
+                else:
+                    with engine.connect() as conn:
+                        conn.execute(text("""
+                            INSERT INTO target_users (user_code, player_name, note) 
+                            VALUES (:uid, :name, :note) ON CONFLICT (user_code) 
+                            DO UPDATE SET player_name=EXCLUDED.player_name, note=EXCLUDED.note
+                        """), {"uid": new_uid, "name": new_pname, "note": new_note})
+                        conn.commit()
+                    st.success("✅ 保存しました")
+                    time.sleep(1)
+                    st.rerun()
 
     try:
         with engine.connect() as conn:
