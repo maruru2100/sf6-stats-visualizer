@@ -71,6 +71,22 @@ services:
       default:
         aliases:
           - sf6_tunnel
+  
+  discord-bot:
+    build: ./discord_bot
+    container_name: sf6_discord_bot
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./discord_bot:/app
+      - ./scraper:/app  # scraperにある共有ファイルを/app直下にマウント
+    depends_on:
+      - db
+    profiles:
+      - external
+    restart: always
 
 volumes:
   postgres_data:
