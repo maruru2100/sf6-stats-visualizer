@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 import os
+import pytz
 import sys
 from sqlalchemy import text
 
@@ -40,11 +41,11 @@ async def send_url(interaction: discord.Interaction):
     
     await interaction.response.send_message(response_msg, ephemeral=True)
 
-# --- コマンド2: URL強制更新 (新規) ---
+# --- コマンド2: URL強制更新 ---
 @bot.tree.command(name="update_url", description="最新のCloudflare URLを取得し、DBを更新します")
 async def refresh_url(interaction: discord.Interaction):
     # 更新には数秒かかることがあるので、「考え中...」状態にする
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
     
     try:
         # scraper.pyの関数を呼び出し（引数にはログ用のprintを渡す）
@@ -56,9 +57,52 @@ async def refresh_url(interaction: discord.Interaction):
             row = res.fetchone()
             url = row[0] if row else "更新に失敗した可能性があります。"
         
-        await interaction.followup.send(f"✅ URLを最新に更新しました！メンバーの皆さんは `/url` で確認してください。\n{url}", ephemeral=False)
+        await interaction.followup.send(f"✅ URLを最新に更新しました！メンバーの皆さんは `/url` で確認してください。(ID,PWがわからない人も `/url` で確認ください。)\n{url}")
     except Exception as e:
         await interaction.followup.send(f"❌ 更新中にエラーが発生しました: {e}", ephemeral=True)
+
+# --- コマンド3: 要望投稿 (匿名・個人用) ---
+@bot.tree.command(name="request", description="Botへの改善要望を匿名で送信します")
+@app_commands.describe(content="要望の内容（100文字以内）")
+async def add_request(interaction: discord.Interaction, content: str):
+    # あまりに長い投稿を制限
+    if len(content) > 100:
+        return await interaction.response.send_message("❌ 要望は100文字以内でお願いします。", ephemeral=True)
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO feature_requests (content) VALUES (:content)"),
+                {"content": content}
+            )
+        
+        await interaction.response.send_message(
+            "🙏 匿名で要望を受け付けました！ありがとうございます。", 
+            ephemeral=True
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ 送信エラー: {e}", ephemeral=True)
+
+# --- コマンド4: 要望一覧表示 (自分だけに見える) ---
+@bot.tree.command(name="show_requests", description="届いている要望一覧を確認します")
+async def show_requests(interaction: discord.Interaction):
+    # もし自分だけに見せたいなら、ここに自分のDiscord IDチェックを入れる
+    # if interaction.user.id != 123456789: return
+    
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT content, created_at FROM feature_requests ORDER BY created_at DESC LIMIT 10"))
+        rows = res.fetchall()
+    
+    if not rows:
+        return await interaction.response.send_message("📭 現在、届いている要望はありません。", ephemeral=True)
+
+    msg = "📝 **最新の要望10件**\n" + "---" * 10 + "\n"
+    for row in rows:
+        # 日本時間に変換して表示
+        jst_time = row.created_at.astimezone(pytz.timezone('Asia/Tokyo')).strftime('%m/%d %H:%M')
+        msg += f"🗓 `{jst_time}`\n└ {row.content}\n\n"
+    
+    await interaction.response.send_message(msg, ephemeral=True)
 
 if __name__ == "__main__":
     bot.run(TOKEN)

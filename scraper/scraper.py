@@ -204,18 +204,3 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
             write_log_func(f"💥 エラー: {e}")
             return False
         finally: browser.close()
-
-# TODO: update_public_url 関数内の、DB更新が成功した直後に以下を呼び出す(接続確認出来たら)
-# send_discord_webhook(public_url)
-def send_discord_webhook(url):
-    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        return
-    
-    payload = {
-        "content": f"📢 **外部公開URLが更新されました！**\n{url}"
-    }
-    try:
-        requests.post(webhook_url, json=payload, timeout=5)
-    except Exception as e:
-        print(f"Discord Webhook通知失敗: {e}")

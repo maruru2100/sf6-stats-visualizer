@@ -94,14 +94,12 @@ with st.sidebar:
     # 外部公開管理セクション
     st.subheader("🌐 外部公開管理")
     if st.button("🔄 公開URLを最新に更新", use_container_width=True, help="Cloudflare Tunnelから最新のランダムURLを取得してDBを更新します"):
-        # ブラウザを起動せず、URL取得ロジックだけを動かす
         update_public_url(write_log)
         st.success("処理が完了しました。ログを確認してください。")
     st.divider()
 
     st.subheader("👥 ターゲットユーザー管理")
     with st.expander("ユーザーを追加/更新"):
-        # st.formを使用して、入力値のリセットとエラー回避を両立させる
         with st.form("user_registration_form", clear_on_submit=True):
             new_uid = st.text_input("ユーザーコード (10桁)")
             new_pname = st.text_input("表示名")
@@ -181,3 +179,33 @@ with col2:
         st.divider()
         st.subheader("最新のキャプチャ")
         st.image(FULL_SCREENSHOT_PATH, caption="Last Scrape View")
+
+    # --- 要望管理セクション ---
+    st.divider()
+    st.subheader("💡 ユーザー要望管理")
+    try:
+        with engine.connect() as conn:
+            # 却下(rejected)でも完了(completed)でもない未処理分を表示
+            req_rows = conn.execute(text(
+                "SELECT id, content, created_at FROM feature_requests WHERE status = 'pending' ORDER BY created_at DESC"
+            )).fetchall()
+
+        if req_rows:
+            for req in req_rows:
+                with st.expander(f"📩 {req.created_at.strftime('%m/%d %H:%M')} : {req.content[:30]}..."):
+                    st.write(f"**内容:** {req.content}")
+                    with st.form(key=f"req_form_{req.id}"):
+                        admin_msg = st.text_input("管理者コメント（理由）", key=f"input_{req.id}")
+                        b_col1, b_col2 = st.columns(2)
+                        if b_col1.form_submit_button("✅ 完了"):
+                            with engine.begin() as conn:
+                                conn.execute(text("UPDATE feature_requests SET status='completed', admin_comment=:c WHERE id=:id"), {"c":admin_msg, "id":req.id})
+                            st.rerun()
+                        if b_col2.form_submit_button("❌ 却下"):
+                            with engine.begin() as conn:
+                                conn.execute(text("UPDATE feature_requests SET status='rejected', admin_comment=:c WHERE id=:id"), {"c":admin_msg, "id":req.id})
+                            st.rerun()
+        else:
+            st.info("未処理の要望はありません。")
+    except Exception as e:
+        st.error(f"要望管理エラー (V6未実行?): {e}")
