@@ -28,7 +28,7 @@ services:
     depends_on:
       - db
 
-  # --- Scraperサービス (修正箇所) ---
+  # --- Scraperサービス ---
   scraper:
     build: ./scraper
     container_name: sf6_scraper
@@ -71,6 +71,24 @@ services:
       default:
         aliases:
           - sf6_tunnel
+  
+  # --- Discord Botサービス ---
+  discord-bot:
+    build: ./discord_bot
+    container_name: sf6_discord_bot
+    env_file:
+      - .env
+    environment:
+      # /app(bot.pyがある場所) と /app/shared(database.pyがある場所) の両方にパスを通す
+      - PYTHONPATH=/app:/app/shared
+    volumes:
+      - ./discord_bot:/app
+      - ./scraper:/app/shared  # scraperをsharedというサブフォルダとしてマウント
+    depends_on:
+      - db
+    profiles:
+      - external
+    restart: always
 
 volumes:
   postgres_data:
