@@ -56,7 +56,7 @@ async def refresh_url(interaction: discord.Interaction):
             row = res.fetchone()
             url = row[0] if row else "更新に失敗した可能性があります。"
         
-        await interaction.followup.send(f"✅ URLを最新に更新しました！\n{url}", ephemeral=True)
+        await interaction.followup.send(f"✅ URLを最新に更新しました！\n{url}", ephemeral=False)
     except Exception as e:
         await interaction.followup.send(f"❌ 更新中にエラーが発生しました: {e}", ephemeral=True)
 
