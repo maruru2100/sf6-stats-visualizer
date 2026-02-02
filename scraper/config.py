@@ -1,5 +1,10 @@
 import os
+import sys
 import pytz
+
+# Pythonの出力を強制的に即時反映（アンバッファ設定）
+os.environ["PYTHONUNBUFFERED"] = "1"
+sys.stdout.reconfigure(line_buffering=True)
 
 # --- 1. 環境変数のバリデーション ---
 TARGET_ID = os.getenv("TARGET_PLAYER_ID")

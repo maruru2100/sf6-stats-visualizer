@@ -17,10 +17,14 @@ def get_now_jst(): return datetime.datetime.now(JST)
 def write_log(message):
     now = get_now_jst().strftime("%Y-%m-%d %H:%M:%S")
     formatted_msg = f"[{now}] {message}"
-    print(formatted_msg)
+    
+    # 既存の print に flush=True を追加して即時反映させる
+    print(formatted_msg, flush=True) 
+    
     try:
         with open(LOG_FILE, "a") as f: f.write(formatted_msg + "\n")
     except: pass
+    
     if "log_messages" not in st.session_state: st.session_state.log_messages = ""
     st.session_state.log_messages += formatted_msg + "\n"
 
