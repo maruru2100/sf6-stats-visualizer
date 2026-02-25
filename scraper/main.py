@@ -184,6 +184,21 @@ with col2:
         st.subheader("最新のキャプチャ")
         st.image(FULL_SCREENSHOT_PATH, caption="Last Scrape View")
 
+    st.divider()
+    st.subheader("🖼️ スクレイピング・エラーの確認")
+    error_files = [f for f in os.listdir(".") if f.startswith("error_") and f.endswith(".png")]
+    if error_files:
+        latest_error = max(error_files, key=os.path.getctime)
+        st.error(f"⚠️ 直近のエラー画面: {latest_error}")
+        st.image(latest_error, caption="Error Screenshot", use_container_width=True)
+        if st.button("🗑️ エラー画像をクリア", use_container_width=True):
+            for f in error_files:
+                try: os.remove(f)
+                except: pass
+            st.rerun()
+    else:
+        st.info("現在、実行エラー画像はありません。")
+
     # --- 要望管理セクション ---
     st.divider()
     st.subheader("💡 ユーザー要望管理")

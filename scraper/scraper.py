@@ -49,12 +49,18 @@ def scrape_performance_data(page, user_id, player_name, write_log_func):
         write_log_func(f"📊 統計解析開始 (ID: {user_id} / {player_name})")
         
         # 動いていたセレクターを維持
-        perf_tab = page.locator('li:has-text("実績"), button:has-text("実績")').first
-        if perf_tab.is_visible():
+        perf_tab_selector = 'li:has-text("実績"), button:has-text("実績")'
+        try:
+            page.wait_for_selector(perf_tab_selector, state="visible", timeout=15000)
+            perf_tab = page.locator(perf_tab_selector).first
             perf_tab.click()
             time.sleep(random.uniform(4.0, 6.0))
-        else:
-            write_log_func("⚠️ '実績'ボタンが見つかりません。")
+        except Exception:
+            # ★ エラー時に画像を保存して即終了
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = f"error_{user_id}_{timestamp}.png"
+            page.screenshot(path=fname)
+            write_log_func(f"⚠️ '実績'ボタンが見つかりません。スクショを保存しました: {fname}")
             return
 
         stats = page.evaluate("""
@@ -134,11 +140,16 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
     write_log_func(f"🚀 スクレイピング開始 (ID: {user_code}, 名前: {player_name})")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
+        browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"], slow_mo=500)
+        write_log_func(f"📂 Cookie読み込みパス: {COOKIE_PATH}")
         context = browser.new_context(
-            storage_state=COOKIE_PATH, viewport={'width': 1280, 'height': 1200},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36", locale="ja-JP"
+            storage_state=COOKIE_PATH,
+            viewport={'width': 1280, 'height': 1200},
+            # Windowsで保存した時と同じUser-Agentを強制指定
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+            java_script_enabled=True,
         )
+        context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         page = context.new_page()
         try:
             page.goto(play_url, wait_until="networkidle", timeout=60000)

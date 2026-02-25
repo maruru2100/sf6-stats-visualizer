@@ -18,7 +18,9 @@ else:
 
 # --- 2. 基本設定 ---
 JST = pytz.timezone('Asia/Tokyo')
-COOKIE_PATH = "./auth/local_cookies.json"
+# /app/auth/local_cookies.json になるように設定
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_PATH = os.path.join(BASE_DIR, "auth", "local_cookies.json")
 FULL_SCREENSHOT_PATH = "./debug_full_screen.png"
 LOG_FILE = "scraper.log"
 
