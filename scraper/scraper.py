@@ -145,7 +145,6 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
         context = browser.new_context(
             storage_state=COOKIE_PATH,
             viewport={'width': 1280, 'height': 1200},
-            # Windowsで保存した時と同じUser-Agentを強制指定
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
             java_script_enabled=True,
         )
@@ -157,11 +156,14 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
             # Cookieダイアログ削除
             page.evaluate("() => { document.querySelectorAll('#CybotCookiebotDialog, [class*=\"praise_\"]').forEach(el => el.remove()); }")
             
+            # --- パフォーマンスデータ取得（既存維持） ---
             scrape_performance_data(page, user_code, player_name, write_log_func)
 
             page.goto(log_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
-            all_found_data = []
+
+            new_count = 0
+            # --- 修正箇所：ページループ内での逐次保存と新規なし判定 ---
             for current_p in range(1, max_pages + 1):
                 write_log_func(f"📑 戦績 {current_p}ページ目をスキャン中...")
                 time.sleep(2)
@@ -188,7 +190,30 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
                     });
                     return results;
                 }""")
-                if p_data: all_found_data.extend(p_data)
+                
+                new_in_page = 0
+                if p_data:
+                    with engine.connect() as conn:
+                        for it in p_data:
+                            dt = datetime.datetime.strptime(it['date'], "%Y/%m/%d %H:%M")
+                            r = conn.execute(text("""
+                                INSERT INTO battle_results (battle_id, played_at, mode, p1_name, p1_char, p1_mr, p1_control, p1_result, p2_name, p2_char, p2_mr, p2_control, p2_result)
+                                VALUES (:bid, :pat, 'RankMatch', :p1n, :p1c, :p1m, :p1ctrl, :p1r, :p2n, :p2c, :p2m, :p2ctrl, :p2r)
+                                ON CONFLICT (battle_id) DO NOTHING
+                            """), {"bid":it['id'], "pat":dt, "p1n":it['p1']['name'], "p1c":it['p1']['char'], "p1m":it['p1']['mr'], "p1ctrl":it['p1']['ctrl'], "p1r":it['p1']['res'], "p2n":it['p2']['name'], "p2c":it['p2']['char'], "p2m":it['p2']['mr'], "p2ctrl":it['p2']['ctrl'], "p2r":it['p2']['res']})
+                            if r.rowcount > 0:
+                                new_in_page += 1
+                        conn.commit()
+                
+                new_count += new_in_page
+
+                # このページに新規が1件もなければ、これ以降を遡る必要なし
+                if new_in_page == 0:
+                    write_log_func(f"✅ {current_p}ページ目に新規戦績はありません。遡りを終了します。")
+                    break
+                else:
+                    write_log_func(f"✨ {current_p}ページ目で {new_in_page}件 の新規戦績を保存しました。")
+
                 if current_p < max_pages:
                     btn = page.locator("li.next:not(.disabled)").first
                     if btn.is_visible():
@@ -197,19 +222,7 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
                         time.sleep(3)
                     else: break
 
-            new_count = 0
-            if all_found_data:
-                with engine.connect() as conn:
-                    for it in all_found_data:
-                        dt = datetime.datetime.strptime(it['date'], "%Y/%m/%d %H:%M")
-                        r = conn.execute(text("""
-                            INSERT INTO battle_results (battle_id, played_at, mode, p1_name, p1_char, p1_mr, p1_control, p1_result, p2_name, p2_char, p2_mr, p2_control, p2_result)
-                            VALUES (:bid, :pat, 'RankMatch', :p1n, :p1c, :p1m, :p1ctrl, :p1r, :p2n, :p2c, :p2m, :p2ctrl, :p2r)
-                            ON CONFLICT (battle_id) DO NOTHING
-                        """), {"bid":it['id'], "pat":dt, "p1n":it['p1']['name'], "p1c":it['p1']['char'], "p1m":it['p1']['mr'], "p1ctrl":it['p1']['ctrl'], "p1r":it['p1']['res'], "p2n":it['p2']['name'], "p2c":it['p2']['char'], "p2m":it['p2']['mr'], "p2ctrl":it['p2']['ctrl'], "p2r":it['p2']['res']})
-                        if r.rowcount > 0: new_count += 1
-                    conn.commit()
-            write_log_func(f"🏁 完了。新規戦績: {new_count}件")
+            write_log_func(f"🏁 完了。合計新規戦績: {new_count}件")
             return True
         except Exception as e:
             write_log_func(f"💥 エラー: {e}")
