@@ -77,7 +77,7 @@ def background_worker():
                 if target_total_minutes <= current_time_total_minutes < target_total_minutes + 60:
                     if last_run != today_str + t_str:
                         write_log(f"⏰ 定期巡回開始 (設定: {t_str})")
-                        run_all_users(max_pages=2) 
+                        run_all_users(max_pages=10) 
                         last_run = today_str + t_str
                         break
             except: continue
