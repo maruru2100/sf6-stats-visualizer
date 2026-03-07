@@ -4,6 +4,7 @@ import time
 import os
 import threading
 import random
+import pandas as pd
 from sqlalchemy import text
 from config import TARGET_ID, DATABASE_URL, ENV_ERROR, JST, LOG_FILE, FULL_SCREENSHOT_PATH
 from database import init_db, engine
@@ -174,12 +175,60 @@ with col1:
 
 with col2:
     st.subheader("登録ユーザー一覧")
+    
+    # 1. データの読み込み
     with engine.connect() as conn:
-        df_users = conn.execute(text("SELECT player_name as 名前, user_code as ID, note as メモ, is_active as 有効 FROM target_users")).fetchall()
-        if df_users:
-            st.table(df_users)
-        else:
-            st.write("登録されているユーザーはいません。")
+        # st.data_editorで扱いやすいよう、pandasや辞書形式に近い形で取得
+        res = conn.execute(text("SELECT user_code as ID, player_name as 名前, note as メモ, is_active as 有効 FROM target_users ORDER BY created_at ASC"))
+        df = pd.DataFrame(res.fetchall(), columns=["ID", "名前", "メモ", "有効"])
+
+    if not df.empty:
+        # 2. 編集可能な表(data_editor)の表示
+        # ※ ID（user_code）は編集不可(disabled)にします
+        edited_df = st.data_editor(
+            df,
+            key="user_editor",
+            disabled=["ID"],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "有効": st.column_config.CheckboxColumn(
+                    help="チェックを外すと自動巡回や一括実行の対象外になります",
+                    default=True,
+                )
+            }
+        )
+
+        # 3. 更新ボタン
+        if st.button("🆙 ユーザー設定を保存", use_container_width=True):
+            try:
+                with engine.begin() as conn:
+                    # ✅ iterrows() を使い、row オブジェクトから正確に値を取得する
+                    for index, row in edited_df.iterrows():
+                        conn.execute(
+                            text("""
+                                UPDATE target_users 
+                                SET player_name = :name, 
+                                    note = :note, 
+                                    is_active = :active 
+                                WHERE user_code = :uid
+                            """),
+                            {
+                                "name": str(row["名前"]),   # カラム名が「名前」であることを確認
+                                "note": str(row["メモ"]),   # カラム名が「メモ」であることを確認
+                                "active": bool(row["有効"]), # チェックボックス
+                                "uid": str(row["ID"])      # WHERE句のキー
+                            }
+                        )
+                st.success("✅ ユーザー設定を更新しました")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                # 詳細なエラー箇所の特定のため、エラー内容を表示
+                st.error(f"❌ 更新失敗: {e}")
+                st.error(f"❌ 更新失敗: {e}")
+    else:
+        st.write("登録されているユーザーはいません。")
             
     if os.path.exists(FULL_SCREENSHOT_PATH):
         st.divider()
