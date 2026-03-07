@@ -132,7 +132,7 @@ def scrape_performance_data(page, user_id, player_name, write_log_func):
         write_log_func("✅ 統計データ保存完了")
     except Exception as e: write_log_func(f"⚠️ 統計取得エラー: {e}")
 
-def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
+def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=False):
     if not user_code: return False
 
     play_url = f"https://www.streetfighter.com/6/buckler/ja-jp/profile/{user_code}/play"
@@ -207,12 +207,15 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5):
                 
                 new_count += new_in_page
 
-                # このページに新規が1件もなければ、これ以降を遡る必要なし
-                if new_in_page == 0:
+                # 修正箇所：force_mode が False の時のみ、新規0件で終了する
+                if new_in_page == 0 and not force_mode:
                     write_log_func(f"✅ {current_p}ページ目に新規戦績はありません。遡りを終了します。")
                     break
                 else:
-                    write_log_func(f"✨ {current_p}ページ目で {new_in_page}件 の新規戦績を保存しました。")
+                    status_msg = f"✨ {current_p}ページ目で {new_in_page}件 の新規戦績を保存しました。"
+                    if force_mode and new_in_page == 0:
+                        status_msg = f"🔍 {current_p}ページ目：新規なし (強制モード継続中...)"
+                    write_log_func(status_msg)
 
                 if current_p < max_pages:
                     btn = page.locator("li.next:not(.disabled)").first

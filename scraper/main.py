@@ -28,7 +28,7 @@ def write_log(message):
     if "log_messages" not in st.session_state: st.session_state.log_messages = ""
     st.session_state.log_messages += formatted_msg + "\n"
 
-def run_all_users(max_pages=2):
+def run_all_users(max_pages=2, force_mode=False):
     """【順次実行】登録されている有効なユーザー全員を順番に実行"""
     try:
         with engine.connect() as conn:
@@ -40,7 +40,7 @@ def run_all_users(max_pages=2):
 
         write_log(f"👥 計 {len(users)} 名の巡回を順次開始します。")
         for i, u in enumerate(users):
-            scrape_sf6(u.user_code, u.player_name, write_log, max_pages=max_pages)
+            scrape_sf6(u.user_code, u.player_name, write_log, max_pages=max_pages, force_mode=force_mode)
             
             if i < len(users) - 1:
                 wait_sec = random.randint(15, 30)
@@ -150,15 +150,17 @@ with col1:
     if users_list:
         selected_u = st.selectbox("単発実行対象", options=users_list, format_func=lambda x: f"{x.player_name} ({x.user_code})")
         max_p = st.slider("巡回ページ数", 1, 50, 5)
+
+        force_scan = st.checkbox("強制モード (新規なしでも指定ページまで取得)", value=False)
         
         c_btn1, c_btn2 = st.columns(2)
         with c_btn1:
             if st.button("🚀 選択ユーザーのみ実行", use_container_width=True):
-                scrape_sf6(selected_u.user_code, selected_u.player_name, write_log, max_pages=max_p)
+                scrape_sf6(selected_u.user_code, selected_u.player_name, write_log, max_pages=max_p, force_mode=force_scan)
                 st.rerun()
         with c_btn2:
             if st.button("🔄 全員分を順次実行", use_container_width=True):
-                run_all_users(max_pages=max_p)
+                run_all_users(max_pages=max_p, force_mode=force_scan)
                 st.rerun()
     else:
         st.info("サイドバーからユーザーを登録してください。")
