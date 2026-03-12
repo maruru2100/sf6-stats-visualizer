@@ -150,7 +150,7 @@ with col1:
     
     if users_list:
         selected_u = st.selectbox("単発実行対象", options=users_list, format_func=lambda x: f"{x.player_name} ({x.user_code})")
-        max_p = st.slider("巡回ページ数", 1, 50, 5)
+        max_p = st.slider("巡回ページ数", 1, 10, 5)
 
         force_scan = st.checkbox("強制モード (新規なしでも指定ページまで取得)", value=False)
         
@@ -171,7 +171,7 @@ with col1:
     if os.path.exists(LOG_FILE):
         with open(LOG_FILE, "r") as f:
             lines = f.readlines()
-            st.text_area("実行履歴 (最新50件)", value="".join(lines[-50:]), height=400)
+            st.text_area("実行履歴 (最新100件)", value="".join(lines[-100:]), height=400)
 
 with col2:
     st.subheader("登録ユーザー一覧")

@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS target_users (
     user_code TEXT PRIMARY KEY,
     player_name TEXT,
     note TEXT,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAM
 );
 
 -- ==========================================
