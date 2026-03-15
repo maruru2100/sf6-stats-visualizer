@@ -2,6 +2,8 @@
 
 ストリートファイター6の公式サイト「Buckler's Booty」から戦績データを自動収集し、Metabaseを用いて詳細な勝率分析やMR推移の可視化を行うためのツール一式です。
 
+[![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge)](https://maruru2100.github.io/sf6-stats-visualizer/)
+
 ## 🌟 主な機能
 - **自動データ収集**: Streamlit UIからの手動取得、およびスケジュール設定による定期自動実行。
 - **MR推移分析**: 日次での最高MRを記録し、成長をグラフ化。
@@ -13,15 +15,7 @@
 - **Discord Bot連携**: スラッシュコマンドによるURL照会、および外出先からの強制更新に対応。
 - **匿名要望管理**: ユーザーからの改善要望をBot経由で受け付け、管理画面で一元管理。
 
-## 🛠 テクノロジースタック
-- **Python (Playwright)**: ブラウザ自動操作によるスクレイピング
-- **Streamlit**: データ収集の管理・ログ確認、および公開URL・ユーザー要望の管理GUI
-- **Discord.py**: 運用補助用Discord Bot
-- **PostgreSQL**: 戦績データおよびシステムステータスの蓄積
-- **Flyway**: データベースマイグレーション管理
-- **Metabase**: BIツールによるデータビジュアライズ・ダッシュボード
-- **Docker / Docker Compose**: 各マイクロサービスのコンテナ化とオーケストレーション
-- **Cloudflare Tunnel (cloudflared)**: 外部公開用セキュアトンネル
+---
 
 ## 📖 公式ドキュメント (GitHub Pages)
 
@@ -33,10 +27,15 @@
 
 ---
 
-### ドキュメントの構成
-- [セットアップガイド](https://maruru2100.github.io/sf6-stats-visualizer/setup)
-- [分析・SQLガイド](https://maruru2100.github.io/sf6-stats-visualizer/analytics/)
-- [運用マニュアル](https://maruru2100.github.io/sf6-stats-visualizer/operation)
+## 🛠 テクノロジースタック
+- **Python (Playwright)**: ブラウザ自動操作によるスクレイピング
+- **Streamlit**: データ収集の管理・ログ確認、および公開URL・ユーザー要望の管理GUI
+- **Discord.py**: 運用補助用Discord Bot
+- **PostgreSQL**: 戦績データおよびシステムステータスの蓄積
+- **Flyway**: データベースマイグレーション管理
+- **Metabase**: BIツールによるデータビジュアライズ・ダッシュボード
+- **Docker / Docker Compose**: 各マイクロサービスのコンテナ化とオーケストレーション
+- **Cloudflare Tunnel (cloudflared)**: 外部公開用セキュアトンネル
 
 ## 🚀 セットアップ
 - 以下の説明はWindows基準です。他OSの方は適宜読み替えてください。
