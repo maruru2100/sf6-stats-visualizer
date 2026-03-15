@@ -23,6 +23,21 @@
 - **Docker / Docker Compose**: 各マイクロサービスのコンテナ化とオーケストレーション
 - **Cloudflare Tunnel (cloudflared)**: 外部公開用セキュアトンネル
 
+## 📖 公式ドキュメント (GitHub Pages)
+
+詳細なセットアップ方法や分析ガイドは、以下のリンクからご確認いただけます。
+> 基本的にはこちらも併せて更新していきますが現状はReadMeが最新のことが多いです。  
+> 最終的にどちらも同じ情報量にできるように頑張ります。
+
+👉 **[SF6 Stats Visualizer オンラインマニュアル](https://maruru2100.github.io/sf6-stats-visualizer/)**
+
+---
+
+### ドキュメントの構成
+- [セットアップガイド](https://maruru2100.github.io/sf6-stats-visualizer/setup)
+- [分析・SQLガイド](https://maruru2100.github.io/sf6-stats-visualizer/analytics/)
+- [運用マニュアル](https://maruru2100.github.io/sf6-stats-visualizer/operation)
+
 ## 🚀 セットアップ
 - 以下の説明はWindows基準です。他OSの方は適宜読み替えてください。
 
