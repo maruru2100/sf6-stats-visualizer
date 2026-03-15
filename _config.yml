@@ -1,0 +1,17 @@
+# テーマの設定
+remote_theme: just-the-docs/just-the-docs
+
+# サイトの基本情報
+title: SF6 Stats Visualizer
+description: SF6戦績分析ツール 公式ドキュメント
+
+# ダークモードの設定
+color_scheme: dark
+
+# GitHub Pages 用の設定
+url: "https://maruru2100.github.io"
+baseurl: "/sf6-stats-visualizer"
+
+# ナビゲーションの設定（任意）
+aux_links:
+  "GitHub Repository": "https://github.com/<あなたのユーザー名>/sf6-stats-visualizer"
