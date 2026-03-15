@@ -3,7 +3,6 @@ remote_theme: just-the-docs/just-the-docs
 
 # サイトの基本情報
 title: SF6 Stats Visualizer
-description: SF6戦績分析ツール 公式ドキュメント
 url: "https://maruru2100.github.io"
 baseurl: "/sf6-stats-visualizer"
 
