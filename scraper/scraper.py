@@ -141,7 +141,7 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=F
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"], slow_mo=500)
-        write_log_func(f"📂 Cookie読み込みパス: {COOKIE_PATH}")
+        # write_log_func(f"📂 Cookie読み込みパス: {COOKIE_PATH}") # 読み込みパス必要な時にコメント解除
         context = browser.new_context(
             storage_state=COOKIE_PATH,
             viewport={'width': 1280, 'height': 1200},

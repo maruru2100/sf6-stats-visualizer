@@ -189,7 +189,7 @@ with col2:
             df,
             key="user_editor",
             disabled=["ID"],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "有効": st.column_config.CheckboxColumn(
@@ -233,7 +233,7 @@ with col2:
     if os.path.exists(FULL_SCREENSHOT_PATH):
         st.divider()
         st.subheader("最新のキャプチャ")
-        st.image(FULL_SCREENSHOT_PATH, caption="Last Scrape View")
+        st.image(FULL_SCREENSHOT_PATH, caption="Last Scrape View", width="stretch")
 
     st.divider()
     st.subheader("🖼️ スクレイピング・エラーの確認")
@@ -241,7 +241,7 @@ with col2:
     if error_files:
         latest_error = max(error_files, key=os.path.getctime)
         st.error(f"⚠️ 直近のエラー画面: {latest_error}")
-        st.image(latest_error, caption="Error Screenshot", use_container_width=True)
+        st.image(latest_error, caption="Error Screenshot", width="stretch")
         if st.button("🗑️ エラー画像をクリア", use_container_width=True):
             for f in error_files:
                 try: os.remove(f)
