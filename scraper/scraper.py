@@ -1,8 +1,7 @@
+import os
 import time
 import random
 import datetime
-import requests
-import re
 import time
 from sqlalchemy import text
 from playwright.sync_api import sync_playwright
@@ -11,7 +10,13 @@ from database import engine
 
 def update_public_url(write_log_func):
     """Cloudflare TunnelのメトリクスからURLを確実に抽出してDBに保存する"""
-    # 接続先をコンテナ名に固定
+    # =========================================================================
+    # 【モード選択】お使いの環境に合わせて、どちらか一方の「処理ブロック」を有効にしてください。
+    # =========================================================================
+
+    # -------------------------------------------------------------------------
+    # 👉 パターンA：お試しURL（クイックトンネル）を使用する場合（デフォルト）
+    # -------------------------------------------------------------------------
     target_url = "http://sf6_tunnel:2000/metrics"
     
     for i in range(6):
@@ -42,6 +47,28 @@ def update_public_url(write_log_func):
     
     write_log_func("⚠️ タイムアウト: URLが発行されませんでした。")
     return False
+
+    # -------------------------------------------------------------------------
+    # 👉 パターンB：独自ドメインを使用する場合
+    #    （使用する場合は、上記のパターンAをすべてコメントアウトし、以下の行の先頭の「#」を外してください）
+    # -------------------------------------------------------------------------
+    # public_url_override = os.getenv("PUBLIC_URL_OVERRIDE", "").strip()
+    # if not public_url_override:
+    #     write_log_func("❌ 設定エラー: 独自ドメインモードですが、.envの PUBLIC_URL_OVERRIDE が空欄です。")
+    #     return False
+    
+    # write_log_func(f"🌐 独自ドメインモード: 固定URLをDBに適用します: {public_url_override}")
+    # try:
+    #     with engine.begin() as conn:
+    #         conn.execute(
+    #             text("UPDATE system_status SET value = :url, updated_at = CURRENT_TIMESTAMP WHERE key = 'public_url'"),
+    #             {"url": public_url_override}
+    #         )
+    #     write_log_func("✅ 固定公開URLをDBに更新しました。")
+    #     return True
+    # except Exception as e:
+    #     write_log_func(f"❌ DB更新エラー: {str(e)}")
+    #     return False
 
 def scrape_performance_data(page, user_id, player_name, write_log_func):
     """【実績】タブから詳細統計を取得・保存"""
