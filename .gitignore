@@ -38,3 +38,7 @@ local/
 
 # --- ドメイン管理系 ---
 .cloudflared/
+
+# --- AI系 ---
+.clinerules
+.cline/
