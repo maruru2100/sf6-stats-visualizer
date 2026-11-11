@@ -1,7 +1,12 @@
+# --- ユーザー向けtempフォルダ ---
+temp/
+
 # --- セキュリティ・個人情報 ---
 # ログイン情報が含まれるクッキーファイル（最重要！）
 auth/local_cookies.json
 local_cookies.json
+# 認証更新用Chromeのプロフィール（ログインセッションを含む）
+scraper/auth/chrome_dev_data/
 
 # データベースの接続情報（パスワード等）
 .env
