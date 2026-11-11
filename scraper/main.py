@@ -88,7 +88,9 @@ def background_worker():
 st.set_page_config(page_title="SF6 Stats Manager", layout="wide")
 
 # 背景スレッドの開始
-if "worker_thread_started" not in st.session_state:
+# 定期巡回は API(api.py の scheduler)側で実行するため、UIでは起動しない
+# (旧UIを単独で使う場合のみ START_UI_SCHEDULER=1 を指定)
+if os.getenv("START_UI_SCHEDULER") == "1" and "worker_thread_started" not in st.session_state:
     if not any(t.name == "BackgroundWorker" for t in threading.enumerate()):
         threading.Thread(target=background_worker, name="BackgroundWorker", daemon=True).start()
     st.session_state.worker_thread_started = True

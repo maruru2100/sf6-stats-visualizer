@@ -37,12 +37,29 @@ services:
     volumes:
       - ./scraper:/app
     ports:
-      - "8501:8501"
+      - "8000:8000"
     depends_on:
       db:
         condition: service_started
       flyway:
         condition: service_completed_successfully
+    restart: always
+
+  # --- 旧Streamlit UI (任意: docker compose --profile ui up) ---
+  scraper-ui:
+    build: ./scraper
+    container_name: sf6_scraper_ui
+    command: streamlit run main.py --server.port=8501 --server.address=0.0.0.0
+    env_file:
+      - .env
+    volumes:
+      - ./scraper:/app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - scraper
+    profiles:
+      - ui
     restart: always
 
   metabase:

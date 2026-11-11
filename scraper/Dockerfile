@@ -14,5 +14,5 @@ RUN playwright install-deps chromium
 
 COPY . .
 
-# Streamlitの起動
-CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# REST API (FastAPI) の起動。旧Streamlit UIは compose の scraper-ui サービスで起動
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
