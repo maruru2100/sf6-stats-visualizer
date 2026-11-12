@@ -112,7 +112,13 @@ def scrape_all(body: ScrapeIn = ScrapeIn()):
 
 @app.get("/scrape/status", dependencies=protected)
 def scrape_status():
-    return services.job_state
+    # 定期巡回もロックを保持するため、ロック状態を実行中の根拠にする
+    state = dict(services.job_state)
+    locked = services.scrape_lock.locked()
+    if locked and not state["running"]:
+        state.update(running=True, job="scheduled")
+    state["running"] = locked
+    return state
 
 
 # --- schedule / logs ---

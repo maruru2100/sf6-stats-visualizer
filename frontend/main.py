@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -28,6 +29,29 @@ def safe(label, func):
     except Exception as e:
         st.error(f"❌ {label}: {e}")
         return None
+
+
+def run_job(path, body):
+    """ジョブを受け付けさせ、完了まで待つ。実行中なら「実行中です」を表示して待たない。処理はバックエンドで継続する"""
+    try:
+        api("POST", path, json=body)
+    except RuntimeError as e:
+        if str(e).startswith("409"):
+            st.warning("⏳ 実行中です。完了までお待ちください。")
+        else:
+            st.error(f"❌ 実行: {e}")
+        return
+    with st.spinner("実行中です... (完了まで待機します)"):
+        time.sleep(1)
+        while True:
+            status = safe("状態取得", lambda: api("GET", "/scrape/status").json())
+            if status is None or not status.get("running"):
+                break
+            time.sleep(2)
+    if status and status.get("error"):
+        st.error(f"❌ 実行エラー: {status['error']}")
+    else:
+        st.success("✅ 実行が完了しました")
 
 
 st.set_page_config(page_title="SF6 Stats Manager", layout="wide")
@@ -99,12 +123,10 @@ with col1:
         c1, c2 = st.columns(2)
         with c1:
             if st.button("🚀 選択ユーザーのみ実行", use_container_width=True):
-                if safe("実行", lambda: api("POST", f"/scrape/users/{selected_u['user_code']}", json=body)):
-                    st.success("実行を受け付けました")
+                run_job(f"/scrape/users/{selected_u['user_code']}", body)
         with c2:
             if st.button("🔄 全員分を順次実行", use_container_width=True):
-                if safe("実行", lambda: api("POST", "/scrape/all", json=body)):
-                    st.success("実行を受け付けました")
+                run_job("/scrape/all", body)
     else:
         st.info("サイドバーからユーザーを登録してください。")
 

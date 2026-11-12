@@ -95,8 +95,10 @@ def start_job(name, func, *args, **kwargs):
     if not scrape_lock.acquire(blocking=False):
         return False
 
+    # スレッド開始前に状態を確定させ、直後のstatus確認で取りこぼさないようにする
+    job_state.update(running=True, job=name, started_at=time.time(), finished_at=None, error=None)
+
     def _run():
-        job_state.update(running=True, job=name, started_at=time.time(), finished_at=None, error=None)
         try:
             func(*args, **kwargs)
         except Exception as e:
