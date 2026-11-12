@@ -1,4 +1,5 @@
 import datetime
+import os
 import threading
 import time
 from config import JST, ENV_ERROR
@@ -42,7 +43,7 @@ def _loop(stop_event):
 
 
 def start():
-    if ENV_ERROR:
+    if ENV_ERROR or os.getenv("SCHEDULER_ENABLED", "1") == "0":
         return None
     stop_event = threading.Event()
     threading.Thread(target=_loop, args=(stop_event,), name="BackgroundWorker", daemon=True).start()

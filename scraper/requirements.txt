@@ -1,8 +1,6 @@
-streamlit
 playwright
 sqlalchemy
 psycopg2-binary
-pandas
 schedule
 requests
 fastapi

@@ -14,5 +14,5 @@ RUN playwright install-deps chromium
 
 COPY . .
 
-# REST API (FastAPI) の起動。旧Streamlit UIは compose の scraper-ui サービスで起動
+# REST API (FastAPI) の起動。UIは frontend コンテナ(Streamlit)が担当
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

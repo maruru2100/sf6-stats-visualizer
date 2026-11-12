@@ -28,7 +28,7 @@ services:
     depends_on:
       - db
 
-  # --- Scraperサービス ---
+  # --- Backend: REST API + スクレイピング + 定期巡回 ---
   scraper:
     build: ./scraper
     container_name: sf6_scraper
@@ -45,21 +45,20 @@ services:
         condition: service_completed_successfully
     restart: always
 
-  # --- 旧Streamlit UI (任意: docker compose --profile ui up) ---
-  scraper-ui:
-    build: ./scraper
-    container_name: sf6_scraper_ui
-    command: streamlit run main.py --server.port=8501 --server.address=0.0.0.0
+  # --- Frontend: Streamlit (APIのクライアント。DBへは直接接続しない) ---
+  frontend:
+    build: ./frontend
+    container_name: sf6_frontend
     env_file:
       - .env
+    environment:
+      - API_URL=http://scraper:8000
     volumes:
-      - ./scraper:/app
+      - ./frontend:/app
     ports:
       - "8501:8501"
     depends_on:
       - scraper
-    profiles:
-      - ui
     restart: always
 
   metabase:
