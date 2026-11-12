@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime
 
 import pandas as pd
@@ -32,26 +31,16 @@ def safe(label, func):
 
 
 def run_job(path, body):
-    """ジョブを受け付けさせ、完了まで待つ。実行中なら「実行中です」を表示して待たない。処理はバックエンドで継続する"""
+    """実行を依頼するだけ。実行中なら「実行中」と表示して何もしない。処理はバックエンドで継続する"""
     try:
         api("POST", path, json=body)
     except RuntimeError as e:
         if str(e).startswith("409"):
-            st.warning("⏳ 実行中です。完了までお待ちください。")
+            st.warning("⏳ 現在実行中です。今回の実行は行いません。")
         else:
             st.error(f"❌ 実行: {e}")
         return
-    with st.spinner("実行中です... (完了まで待機します)"):
-        time.sleep(1)
-        while True:
-            status = safe("状態取得", lambda: api("GET", "/scrape/status").json())
-            if status is None or not status.get("running"):
-                break
-            time.sleep(2)
-    if status and status.get("error"):
-        st.error(f"❌ 実行エラー: {status['error']}")
-    else:
-        st.success("✅ 実行が完了しました")
+    st.success("🚀 実行を受け付けました。進捗はログで確認できます。")
 
 
 st.set_page_config(page_title="SF6 Stats Manager", layout="wide")
