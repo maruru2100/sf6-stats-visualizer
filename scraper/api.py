@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from contextlib import asynccontextmanager
@@ -14,6 +15,17 @@ from database import init_db
 from logger import tail_log
 
 API_KEY = os.getenv("API_KEY")
+
+
+class _QuietPolling(logging.Filter):
+    """画面が3秒ごとに呼ぶ /logs と /scrape/status をアクセスログから除外する"""
+
+    def filter(self, record):
+        msg = record.getMessage()
+        return not (" /logs" in msg or " /scrape/status" in msg)
+
+
+logging.getLogger("uvicorn.access").addFilter(_QuietPolling())
 
 
 def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
