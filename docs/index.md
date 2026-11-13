@@ -15,7 +15,8 @@
   - Metabase の使い方と提供クエリの解説。
 
 ## 🏗️ ディレクトリ構成
-- `scraper/`: スクレイピングエンジンの本体。
+- `scraper/`: スクレイピングエンジンと REST API（FastAPI）。
+- `frontend/`: 管理画面（Streamlit）。API 経由でのみ操作します。
 - `analytics/queries/`: Metabase 用の SQL 資産。
 - `discord_bot/`: 通知・操作用 Bot。
 - `flyway/`: データベーススキーマ管理。

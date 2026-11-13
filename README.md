@@ -29,7 +29,8 @@
 
 ## 🛠 テクノロジースタック
 - **Python (Playwright)**: ブラウザ自動操作によるスクレイピング
-- **Streamlit**: データ収集の管理・ログ確認、および公開URL・ユーザー要望の管理GUI
+- **Streamlit (frontend)**: データ収集の管理・ログ確認、および公開URL・ユーザー要望の管理GUI。REST API のクライアントとして動作します
+- **FastAPI (scraper)**: スクレイピング・定期実行・ユーザー/要望管理を受け付ける REST API（Swagger: http://localhost:8000/docs）
 - **Discord.py**: 運用補助用Discord Bot
 - **PostgreSQL**: 戦績データおよびシステムステータスの蓄積
 - **Flyway**: データベースマイグレーション管理
@@ -98,7 +99,10 @@ Streamlit管理画面（http://localhost:8501）の下部に「💡 ユーザー
 
 ## 📊 アクセス方法
 - **管理画面 (Streamlit)**: http://localhost:8501
-  - ユーザーの追加・削除、定期実行スケジュールの変更、要望の管理が可能です。「今すぐ取得」ボタンを押すと即座にスクレイピングが始まります。
+  - ユーザーの追加・削除、定期実行スケジュールの変更、要望の管理が可能です。実行ボタンを押すとバックエンドで実行を開始します。すでに実行中の場合は「現在実行中です」と表示され、重複しては実行しません。
+- **REST API (FastAPI)**: http://localhost:8000 （仕様は http://localhost:8000/docs ）
+  - `.env` に `API_KEY` を設定すると、`/health` 以外は `X-API-Key` ヘッダが必須になります（フロントにも同じ値が渡されます）。
+  - 主なエンドポイント: `/users`, `/scrape/users/{user_code}`, `/scrape/all`, `/scrape/status`, `/schedule`, `/logs`, `/system/public-url/refresh`, `/feature-requests`, `/health`
 - **分析画面 (Metabase)**: http://localhost:3000
   - 初回起動時にPostgreSQL（ホスト名: `db`）との接続設定を行ってください。
 

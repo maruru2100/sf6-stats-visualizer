@@ -28,7 +28,7 @@ services:
     depends_on:
       - db
 
-  # --- Scraperサービス ---
+  # --- Backend: REST API + スクレイピング + 定期巡回 ---
   scraper:
     build: ./scraper
     container_name: sf6_scraper
@@ -37,12 +37,28 @@ services:
     volumes:
       - ./scraper:/app
     ports:
-      - "8501:8501"
+      - "8000:8000"
     depends_on:
       db:
         condition: service_started
       flyway:
         condition: service_completed_successfully
+    restart: always
+
+  # --- Frontend: Streamlit (APIのクライアント。DBへは直接接続しない) ---
+  frontend:
+    build: ./frontend
+    container_name: sf6_frontend
+    env_file:
+      - .env
+    environment:
+      - API_URL=http://scraper:8000
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "8501:8501"
+    depends_on:
+      - scraper
     restart: always
 
   metabase:
