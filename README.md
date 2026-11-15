@@ -30,7 +30,7 @@
 ## 🛠 テクノロジースタック
 - **Python (Playwright)**: ブラウザ自動操作によるスクレイピング
 - **Streamlit (frontend)**: データ収集の管理・ログ確認、および公開URL・ユーザー要望の管理GUI。REST API のクライアントとして動作します
-- **FastAPI (scraper)**: スクレイピング・定期実行・ユーザー/要望管理を受け付ける REST API（Swagger: http://localhost:8000/docs）
+- **FastAPI (scraper)**: スクレイピング・定期実行・ユーザー/要望管理を受け付ける REST API（Swagger: http://localhost:8000/docs ）
 - **Discord.py**: 運用補助用Discord Bot
 - **PostgreSQL**: 戦績データおよびシステムステータスの蓄積
 - **Flyway**: データベースマイグレーション管理
