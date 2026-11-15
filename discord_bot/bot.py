@@ -1,7 +1,9 @@
+import asyncio
 import discord
 from discord import app_commands
 import os
 import pytz
+import requests
 import sys
 from sqlalchemy import text
 
@@ -12,6 +14,9 @@ from scraper import update_public_url
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SHARED_ID = os.getenv("SHARED_LOGIN_ID")
 SHARED_PW = os.getenv("SHARED_LOGIN_PW")
+API_URL = os.getenv("API_URL", "http://scraper:8000").rstrip("/")
+API_KEY = os.getenv("API_KEY")
+API_HEADERS = {"X-API-Key": API_KEY} if API_KEY else {}
 
 class SF6Bot(discord.Client):
     def __init__(self):
@@ -103,6 +108,92 @@ async def show_requests(interaction: discord.Interaction):
         msg += f"🗓 `{jst_time}`\n└ {row.content}\n\n"
     
     await interaction.response.send_message(msg, ephemeral=True)
+
+# --- スキャン開始 (scraper の REST API 経由。画面と同じ排他制御) ---
+def _call_api(method, path, **kwargs):
+    r = requests.request(method, f"{API_URL}{path}", headers=API_HEADERS, timeout=30, **kwargs)
+    if not r.ok:
+        try:
+            detail = r.json().get("detail", r.text)
+        except ValueError:
+            detail = r.text
+        raise RuntimeError(f"{r.status_code}: {detail}")
+    return r.json()
+
+
+SCAN_MAX_PAGES = 10
+POLL_INTERVAL_SEC = 10
+# followup(interaction token)の有効期限は15分のため、それより手前で待機を打ち切る
+POLL_TIMEOUT_SEC = 14 * 60
+
+
+async def _wait_scan_finished():
+    """ジョブ終了までステータスを監視し、最終状態を返す。タイムアウト時は None"""
+    waited = 0
+    while waited < POLL_TIMEOUT_SEC:
+        await asyncio.sleep(POLL_INTERVAL_SEC)
+        waited += POLL_INTERVAL_SEC
+        try:
+            state = await asyncio.to_thread(_call_api, "GET", "/scrape/status")
+        except Exception:
+            continue
+        if not state.get("running"):
+            return state
+    return None
+
+
+async def _start_scan(interaction: discord.Interaction, path: str, label: str, force: bool):
+    # 結果は実行した本人にだけ表示する
+    await interaction.response.defer(ephemeral=True)
+    try:
+        await asyncio.to_thread(_call_api, "POST", path, json={"max_pages": SCAN_MAX_PAGES, "force_mode": force})
+    except RuntimeError as e:
+        if str(e).startswith("409"):
+            return await interaction.followup.send("⏳ 現在スキャン実行中です。今回の実行は行いません。", ephemeral=True)
+        return await interaction.followup.send(f"❌ スキャン開始に失敗しました: {e}", ephemeral=True)
+    except Exception as e:
+        return await interaction.followup.send(f"❌ APIに接続できません: {e}", ephemeral=True)
+
+    await interaction.followup.send(f"🚀 {label}のスキャンを開始しました。完了したらお知らせします。", ephemeral=True)
+
+    state = await _wait_scan_finished()
+    if state is None:
+        msg = "⏱ スキャンがまだ続いています。結果は管理画面のログで確認してください。"
+    elif state.get("error_code") == "auth_expired":
+        msg = ("🔒 認証セッション(Cookie)が切れているため、戦績を取得できませんでした。\n"
+               "管理者に認証の更新(Cookie再取得)を依頼してください。")
+    elif state.get("error"):
+        msg = f"❌ スキャン中にエラーが発生しました: {state['error']}"
+    else:
+        msg = f"✅ {label}のスキャンが完了しました。"
+    await interaction.followup.send(msg, ephemeral=True)
+
+
+async def _user_autocomplete(interaction: discord.Interaction, current: str):
+    try:
+        users = await asyncio.to_thread(_call_api, "GET", "/users")
+    except Exception:
+        return []
+    current = current.lower()
+    return [
+        app_commands.Choice(name=f"{u['player_name']} ({u['user_code']})"[:100], value=u["user_code"])
+        for u in users
+        if current in u["player_name"].lower() or current in u["user_code"]
+    ][:25]
+
+
+@bot.tree.command(name="scan_user", description="特定のユーザーだけスキャンを開始します")
+@app_commands.describe(user="スキャン対象のユーザー", force="強制モード")
+@app_commands.autocomplete(user=_user_autocomplete)
+async def scan_user(interaction: discord.Interaction, user: str, force: bool = False):
+    await _start_scan(interaction, f"/scrape/users/{user}", f"ユーザー `{user}` ", force)
+
+
+@bot.tree.command(name="scan_all", description="登録済みの全ユーザーのスキャンを開始します")
+@app_commands.describe(force="強制モード")
+async def scan_all(interaction: discord.Interaction, force: bool = False):
+    await _start_scan(interaction, "/scrape/all", "全ユーザー", force)
+
 
 if __name__ == "__main__":
     bot.run(TOKEN)

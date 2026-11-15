@@ -107,6 +107,7 @@ services:
     environment:
       # /app(bot.pyがある場所) と /app/shared(database.pyがある場所) の両方にパスを通す
       - PYTHONPATH=/app:/app/shared
+      - API_URL=http://scraper:8000
     volumes:
       - ./discord_bot:/app
       - ./scraper:/app/shared  # scraperをsharedというサブフォルダとしてマウント

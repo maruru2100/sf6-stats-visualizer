@@ -159,6 +159,15 @@ def scrape_performance_data(page, user_id, player_name, write_log_func):
         write_log_func("✅ 統計データ保存完了")
     except Exception as e: write_log_func(f"⚠️ 統計取得エラー: {e}")
 
+class AuthExpiredError(Exception):
+    """Cookie(認証セッション)切れでログイン画面に飛ばされた"""
+
+
+def _ensure_logged_in(page):
+    if "login" in page.url.lower():
+        raise AuthExpiredError(f"ログイン画面へリダイレクトされました: {page.url}")
+
+
 def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=False):
     if not user_code: return False
 
@@ -180,6 +189,7 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=F
         try:
             page.goto(play_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
+            _ensure_logged_in(page)
             # Cookieダイアログ削除
             page.evaluate("() => { document.querySelectorAll('#CybotCookiebotDialog, [class*=\"praise_\"]').forEach(el => el.remove()); }")
             
@@ -188,6 +198,7 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=F
 
             page.goto(log_url, wait_until="networkidle", timeout=60000)
             time.sleep(5)
+            _ensure_logged_in(page)
 
             new_count = 0
             # --- 修正箇所：ページループ内での逐次保存と新規なし判定 ---
@@ -254,6 +265,8 @@ def scrape_sf6(user_code, player_name, write_log_func, max_pages=5, force_mode=F
 
             write_log_func(f"🏁 完了。合計新規戦績: {new_count}件")
             return True
+        except AuthExpiredError:
+            raise
         except Exception as e:
             write_log_func(f"💥 エラー: {e}")
             return False
