@@ -4,13 +4,13 @@ import time
 from sqlalchemy import text
 from database import engine
 from logger import write_log
-from scraper import scrape_sf6, update_public_url
+from scraper import AuthExpiredError, scrape_sf6, update_public_url
 
 DEFAULT_RUN_TIMES = "09:00,21:00"
 
 # Playwright / 対象サイト負荷対策のため、スクレイピングは同時に1本のみ
 scrape_lock = threading.Lock()
-job_state = {"running": False, "job": None, "started_at": None, "finished_at": None, "error": None}
+job_state = {"running": False, "job": None, "started_at": None, "finished_at": None, "error": None, "error_code": None}
 
 
 # --- Users ---
@@ -66,8 +66,16 @@ def set_run_times(value):
 
 
 # --- Scraping ---
+def _auth_expired(e):
+    write_log(f"🔒 認証セッション切れの可能性があります。Cookieの再取得が必要です: {e}")
+    job_state["error_code"] = "auth_expired"
+
+
 def run_user(user_code, player_name, max_pages=2, force_mode=False):
-    scrape_sf6(user_code, player_name, write_log, max_pages=max_pages, force_mode=force_mode)
+    try:
+        scrape_sf6(user_code, player_name, write_log, max_pages=max_pages, force_mode=force_mode)
+    except AuthExpiredError as e:
+        _auth_expired(e)
 
 
 def run_all_users(max_pages=2, force_mode=False):
@@ -80,7 +88,12 @@ def run_all_users(max_pages=2, force_mode=False):
             return
         write_log(f"👥 計 {len(users)} 名の巡回を順次開始します。")
         for i, u in enumerate(users):
-            scrape_sf6(u.user_code, u.player_name, write_log, max_pages=max_pages, force_mode=force_mode)
+            try:
+                scrape_sf6(u.user_code, u.player_name, write_log, max_pages=max_pages, force_mode=force_mode)
+            except AuthExpiredError as e:
+                # 全員同じCookieなので続行しても全員失敗する
+                _auth_expired(e)
+                return
             if i < len(users) - 1:
                 wait_sec = random.randint(15, 30)
                 write_log(f"☕ 負荷軽減のため {wait_sec}秒 待機して次のユーザーへ移ります...")
@@ -96,7 +109,7 @@ def start_job(name, func, *args, **kwargs):
         return False
 
     # スレッド開始前に状態を確定させ、直後のstatus確認で取りこぼさないようにする
-    job_state.update(running=True, job=name, started_at=time.time(), finished_at=None, error=None)
+    job_state.update(running=True, job=name, started_at=time.time(), finished_at=None, error=None, error_code=None)
 
     def _run():
         try:
