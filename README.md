@@ -12,7 +12,8 @@
 - **調子の可視化**: 日別の勝率をエリアグラフで表示し、プレイの質を客観的に評価。
 - **セキュアな外部共有**: Cloudflare Tunnelを利用し、固定IPやポート開放なしで仲間内にMetabaseを公開。
 - **URL自動管理**: 公開用のランダムURLを自動取得し、DBへ保存。
-- **Discord Bot連携**: スラッシュコマンドによるURL照会、および外出先からの強制更新に対応。
+- **Discord Bot連携**: スラッシュコマンドによるURL照会、外出先からのURL更新、およびスキャン開始（ユーザー指定／全ユーザー）に対応。
+- **認証切れ検知**: Cookie期限切れ時はスキャンを中断し、Bot/管理画面へ通知。`scraper/auth_refresh.py` でCookieを再取得可能。
 - **匿名要望管理**: ユーザーからの改善要望をBot経由で受け付け、管理画面で一元管理。
 
 ---
@@ -20,8 +21,7 @@
 ## 📖 公式ドキュメント (GitHub Pages)
 
 詳細なセットアップ方法や分析ガイドは、以下のリンクからご確認いただけます。
-> 基本的にはこちらも併せて更新していきますが現状はReadMeが最新のことが多いです。  
-> 最終的にどちらも同じ情報量にできるように頑張ります。
+> README と同じ内容を維持するよう更新しています。差異がある場合は README を優先してください。
 
 👉 **[SF6 Stats Visualizer オンラインマニュアル](https://maruru2100.github.io/sf6-stats-visualizer/)**
 
@@ -44,7 +44,7 @@
 ### 1. リポジトリの準備
 ```cmd
 git clone 本リポジトリ
-cd sf6-stats-manager
+cd sf6-stats-visualizer
 ```
 
 ### 2. 環境変数の設定
@@ -59,9 +59,19 @@ copy .env.example .env
 - MY_PLAYER_NAME: あなたのプレイヤー名（集計用）
 - DISCORD_BOT_TOKEN: Discord Developer Portalで発行したトークン
 - SHARED_LOGIN_ID / SHARED_LOGIN_PW: メンバーに共有するMetabase用ログイン情報（任意）
+- API_KEY: REST API の認証キー（任意）。設定すると `/health` 以外で `X-API-Key` ヘッダが必須になります。frontend / Discord Bot にも同じ値が渡されます。
+- PUBLIC_URL_OVERRIDE / CF_TUNNEL_TOKEN: 独自ドメインで外部公開する場合のみ設定（任意）
+- SCHEDULER_ENABLED: `0` を指定すると定期巡回を無効化します（既定: 有効）
 
 ### 3. 認証情報の配置
-Playwright用のクッキー情報（local_cookies.json）を ./auth/ フォルダ内に配置してください。
+Playwright用のクッキー情報（local_cookies.json）を `scraper/auth/` フォルダ内に配置してください（`local_cookies.json.example` を参考）。
+
+Cookieの期限が切れた場合（スキャン時に「認証切れ」と表示）は、Windowsのホスト上で以下を実行すると、デバッグモードのChromeからCookieを再取得できます（Chromeが `C:\Program Files\Google\Chrome\Application\chrome.exe` にある前提）。
+```cmd
+cd scraper
+python auth_refresh.py
+```
+画面の案内に従ってバックラーにログインし、Enterキーを押すと `scraper/auth/local_cookies.json` が更新されます。
 
 ### 4. 起動
 Dockerを使用してすべてのコンテナを起動します。
@@ -90,6 +100,11 @@ Botを導入したサーバーで以下のスラッシュコマンドが利用�
 - `/request [内容]`: 開発者へ匿名の改善要望を送信します。
   - **※ユーザーID等は保存されず、完全匿名で送信されます。**
 - `/show_requests`: 届いている要望一覧を確認します。
+- `/scan_user [user] [force]`: 指定ユーザー（候補を自動補完）のスキャンを開始します。
+- `/scan_all [force]`: 登録済みの全ユーザーのスキャンを開始します。
+  - **※結果は実行者にのみ表示されます。すでに実行中の場合は開始されません。Cookie切れの場合はその旨が通知されます。**
+
+※ Botは `--profile external` 指定時に起動します。
 
 ## 📝 要望の管理
 Streamlit管理画面（http://localhost:8501）の下部に「💡 ユーザー要望管理」セクションが追加されています。
@@ -102,7 +117,7 @@ Streamlit管理画面（http://localhost:8501）の下部に「💡 ユーザー
   - ユーザーの追加・削除、定期実行スケジュールの変更、要望の管理が可能です。実行ボタンを押すとバックエンドで実行を開始します。すでに実行中の場合は「現在実行中です」と表示され、重複しては実行しません。
 - **REST API (FastAPI)**: http://localhost:8000 （仕様は http://localhost:8000/docs ）
   - `.env` に `API_KEY` を設定すると、`/health` 以外は `X-API-Key` ヘッダが必須になります（フロントにも同じ値が渡されます）。
-  - 主なエンドポイント: `/users`, `/scrape/users/{user_code}`, `/scrape/all`, `/scrape/status`, `/schedule`, `/logs`, `/system/public-url/refresh`, `/feature-requests`, `/health`
+  - 主なエンドポイント: `/users`, `/scrape/users/{user_code}`, `/scrape/all`, `/scrape/status`, `/schedule`, `/logs`, `/system/public-url/refresh`, `/system/screenshot`, `/system/errors`, `/feature-requests`, `/health`
 - **分析画面 (Metabase)**: http://localhost:3000
   - 初回起動時にPostgreSQL（ホスト名: `db`）との接続設定を行ってください。
 

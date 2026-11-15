@@ -15,7 +15,7 @@
 - **TARGET_PLAYER_ID**: あなたの10桁のユーザーID。
 - **MY_PLAYER_NAME**: あなたのプレイヤー名（集計表示用）。
 - **local_cookies.json**: バックラーズメイルにログインするための認証クッキー。
-  - ブラウザのデベロッパーツール等で取得し、`./auth/` フォルダ内に配置してください。
+  - `scraper/auth/` フォルダ内に配置してください（`local_cookies.json.example` 参照）。`scraper/auth_refresh.py` でChromeから取得することもできます（[運用マニュアル](./operation.md)参照）。
 
 ## 🛠️ 2. インストール手順
 
@@ -23,7 +23,7 @@
 コマンドプロンプトやターミナルで以下を実行します。
 ```cmd
 git clone [https://github.com/maruru2100/sf6-stats-visualizer.git](https://github.com/maruru2100/sf6-stats-visualizer.git)
-cd sf6-stats-manager
+cd sf6-stats-visualizer
 ```
 
 ### 環境変数の設定
@@ -35,6 +35,9 @@ copy .env.example .env
 主要な設定項目:
 - DISCORD_BOT_TOKEN: Discord Botを使用する場合に設定。
 - SHARED_LOGIN_ID / SHARED_LOGIN_PW: メンバーに共有するMetabase用ログイン情報（任意）
+- API_KEY: REST API の認証キー（任意）。設定すると `/health` 以外で `X-API-Key` ヘッダが必須になります。
+- PUBLIC_URL_OVERRIDE / CF_TUNNEL_TOKEN: 独自ドメインで外部公開する場合のみ設定（任意）
+- SCHEDULER_ENABLED: `0` で定期巡回を無効化（既定: 有効）
 
 ## 🚢 3. サービスの起動
 
@@ -71,4 +74,5 @@ docker-compose --profile external up -d
 ```
 
 起動後、管理画面または Discord Bot の /url コマンドで公開用URLを確認できます。
+Discord Bot は `external` プロファイルで起動します。
 
