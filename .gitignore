@@ -47,3 +47,4 @@ local/
 # --- AI系 ---
 .clinerules
 .cline/
+.github/agents/
