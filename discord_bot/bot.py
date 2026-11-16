@@ -195,5 +195,20 @@ async def scan_all(interaction: discord.Interaction, force: bool = False):
     await _start_scan(interaction, "/scrape/all", "全ユーザー", force)
 
 
+@bot.tree.command(name="info", description="実装済みのスラッシュコマンドの使い方を表示します")
+async def info(interaction: discord.Interaction):
+    # 登録済みコマンドから生成するため、コマンド追加時も自動で反映される
+    lines = ["📖 **利用できるコマンド一覧**"]
+    for cmd in sorted(bot.tree.get_commands(), key=lambda c: c.name):
+        usage = f"/{cmd.name}"
+        details = []
+        for p in cmd.parameters:
+            usage += f" [{p.display_name}]" if p.required else f" ({p.display_name})"
+            details.append(f"　・`{p.display_name}`{'' if p.required else '（任意）'}: {p.description}")
+        lines.append(f"\n`{usage}`\n{cmd.description}")
+        lines.extend(details)
+    await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+
 if __name__ == "__main__":
     bot.run(TOKEN)
