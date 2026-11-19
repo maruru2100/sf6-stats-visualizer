@@ -48,3 +48,7 @@ local/
 .clinerules
 .cline/
 .github/agents/
+
+# --- 移行・バックアップツール（Issue #32） ---
+# 出力されたzipにはDBダンプや（オプション次第で）秘密情報が入るためGit管理外
+backups/
