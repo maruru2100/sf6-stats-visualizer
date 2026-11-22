@@ -1,29 +1,46 @@
 import os
+import re
 import time
 import random
 import datetime
-import time
+import requests
 from sqlalchemy import text
 from playwright.sync_api import sync_playwright
 from config import COOKIE_PATH, FULL_SCREENSHOT_PATH
 from database import engine
 
-def update_public_url(write_log_func):
-    """Cloudflare TunnelのメトリクスからURLを確実に抽出してDBに保存する"""
-    # =========================================================================
-    # 【モード選択】お使いの環境に合わせて、どちらか一方の「処理ブロック」を有効にしてください。
-    # =========================================================================
+TUNNEL_METRICS_URL = "http://sf6_tunnel:2000/metrics"
+TUNNEL_URL_RETRIES = 6
+TUNNEL_URL_RETRY_INTERVAL_SEC = 10
 
-    # -------------------------------------------------------------------------
-    # 👉 パターンA：お試しURL（クイックトンネル）を使用する場合（デフォルト）
-    # -------------------------------------------------------------------------
-    target_url = "http://sf6_tunnel:2000/metrics"
-    
-    for i in range(6):
+
+def _save_public_url(public_url):
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE system_status SET value = :url, updated_at = CURRENT_TIMESTAMP WHERE key = 'public_url'"),
+            {"url": public_url}
+        )
+
+
+def _apply_fixed_public_url(public_url, write_log_func):
+    """独自ドメインモード: .env の PUBLIC_URL_OVERRIDE をそのままDBに保存する"""
+    write_log_func(f"🌐 独自ドメインモード: 固定URLをDBに適用します: {public_url}")
+    try:
+        _save_public_url(public_url)
+        write_log_func("✅ 固定公開URLをDBに更新しました。")
+        return True
+    except Exception as e:
+        write_log_func(f"❌ DB更新エラー: {str(e)}")
+        return False
+
+
+def _fetch_quick_tunnel_url(write_log_func):
+    """クイックトンネルモード: cloudflared のメトリクスから trycloudflare.com のURLを抽出してDBに保存する"""
+    for i in range(TUNNEL_URL_RETRIES):
         try:
-            write_log_func(f"🌐 外部公開URLを確認中... (試行 {i+1}/6)")
-            response = requests.get(target_url, timeout=5)
-            
+            write_log_func(f"🌐 外部公開URLを確認中... (試行 {i+1}/{TUNNEL_URL_RETRIES})")
+            response = requests.get(TUNNEL_METRICS_URL, timeout=5)
+
             if response.status_code == 200:
                 text_data = response.text
                 if 'cloudflared_tunnel_user_hostnames_counts' in text_data:
@@ -31,11 +48,7 @@ def update_public_url(write_log_func):
                     match = re.search(r'userHostname="(https://[^"]+)"', text_data)
                     if match:
                         public_url = match.group(1)
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("UPDATE system_status SET value = :url, updated_at = CURRENT_TIMESTAMP WHERE key = 'public_url'"),
-                                {"url": public_url}
-                            )
+                        _save_public_url(public_url)
                         write_log_func(f"✅ 公開URLをDBに更新しました: {public_url}")
                         return True
                 write_log_func("ℹ️ Tunnel準備中... URL発行を待機しています。")
@@ -43,32 +56,31 @@ def update_public_url(write_log_func):
                 write_log_func(f"⚠️ HTTPエラー: {response.status_code}")
         except Exception as e:
             write_log_func(f"❌ 接続エラー: {str(e)}")
-        time.sleep(10)
-    
+        time.sleep(TUNNEL_URL_RETRY_INTERVAL_SEC)
+
     write_log_func("⚠️ タイムアウト: URLが発行されませんでした。")
     return False
 
-    # -------------------------------------------------------------------------
-    # 👉 パターンB：独自ドメインを使用する場合
-    #    （使用する場合は、上記のパターンAをすべてコメントアウトし、以下の行の先頭の「#」を外してください）
-    # -------------------------------------------------------------------------
-    # public_url_override = os.getenv("PUBLIC_URL_OVERRIDE", "").strip()
-    # if not public_url_override:
-    #     write_log_func("❌ 設定エラー: 独自ドメインモードですが、.envの PUBLIC_URL_OVERRIDE が空欄です。")
-    #     return False
-    
-    # write_log_func(f"🌐 独自ドメインモード: 固定URLをDBに適用します: {public_url_override}")
-    # try:
-    #     with engine.begin() as conn:
-    #         conn.execute(
-    #             text("UPDATE system_status SET value = :url, updated_at = CURRENT_TIMESTAMP WHERE key = 'public_url'"),
-    #             {"url": public_url_override}
-    #         )
-    #     write_log_func("✅ 固定公開URLをDBに更新しました。")
-    #     return True
-    # except Exception as e:
-    #     write_log_func(f"❌ DB更新エラー: {str(e)}")
-    #     return False
+
+def update_public_url(write_log_func):
+    """外部公開URLをDBに保存する。
+
+    .env の設定に応じて自動でモードを切り替える:
+    - PUBLIC_URL_OVERRIDE あり → 独自ドメインモード（固定URLを保存）
+    - PUBLIC_URL_OVERRIDE なし → クイックトンネルモード（cloudflared のメトリクスからURLを取得）
+    独自ドメイン運用では CF_TUNNEL_TOKEN と PUBLIC_URL_OVERRIDE の両方が必要。
+    """
+    public_url_override = os.getenv("PUBLIC_URL_OVERRIDE", "").strip()
+    tunnel_token = os.getenv("CF_TUNNEL_TOKEN", "").strip()
+
+    if public_url_override:
+        return _apply_fixed_public_url(public_url_override, write_log_func)
+
+    if tunnel_token:
+        write_log_func("❌ 設定エラー: CF_TUNNEL_TOKEN が設定されていますが、.env の PUBLIC_URL_OVERRIDE が空欄です。独自ドメイン運用では両方の設定が必要です。")
+        return False
+
+    return _fetch_quick_tunnel_url(write_log_func)
 
 def scrape_performance_data(page, user_id, player_name, write_log_func):
     """【実績】タブから詳細統計を取得・保存"""

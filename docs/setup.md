@@ -36,7 +36,7 @@ copy .env.example .env
 - DISCORD_BOT_TOKEN: Discord Botを使用する場合に設定。
 - SHARED_LOGIN_ID / SHARED_LOGIN_PW: メンバーに共有するMetabase用ログイン情報（任意）
 - API_KEY: REST API の認証キー（任意）。設定すると `/health` 以外で `X-API-Key` ヘッダが必須になります。
-- PUBLIC_URL_OVERRIDE / CF_TUNNEL_TOKEN: 独自ドメインで外部公開する場合のみ設定（任意）
+- PUBLIC_URL_OVERRIDE / CF_TUNNEL_TOKEN: 独自ドメインで外部公開する場合のみ**両方**設定（任意）。空欄ならお試しURL（クイックトンネル）で自動動作します。
 - SCHEDULER_ENABLED: `0` で定期巡回を無効化（既定: 有効）
 
 ## 🚢 3. サービスの起動
