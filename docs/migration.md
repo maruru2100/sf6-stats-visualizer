@@ -27,8 +27,8 @@ zip 内には `manifest.json` が入り、作成日時・Gitコミット・モ�
 
 | 指定 | `.env` | Cookie |
 |---|---|---|
-| `--mode migration`（デフォルト） | 含む | 含む |
-| `--mode backup` | 含まない | 含まない |
+| `--mode backup`（デフォルト） | 含まない | 含まない |
+| `--mode migration` | 含む | 含む |
 | `--include-secrets` / `--no-secrets` | モードのプリセットを上書き（両方） | 同左 |
 | `--include-env` / `--no-env` | 個別に上書き | － |
 | `--include-cookies` / `--no-cookies` | － | 個別に上書き |
@@ -48,14 +48,14 @@ zip 内には `manifest.json` が入り、作成日時・Gitコミット・モ�
 ### バックアップ／移行用エクスポート
 
 ```bat
-rem 移行用（秘密を含む）
+rem 日常バックアップ用（秘密を含まない・デフォルト）
 tools\migration\backup.bat
 
-rem 日常バックアップ用（秘密を含まない）
-tools\migration\backup.bat --mode backup
+rem 移行用（秘密を含む）
+tools\migration\backup.bat --mode migration
 
 rem 何が起きるかだけ確認
-tools\migration\backup.bat --dry-run
+tools\migration\backup.bat --mode migration --dry-run
 ```
 
 Linux では `tools/migration/backup.sh` が同じ引数で使えます。
@@ -75,17 +75,25 @@ tools\migration\restore.bat backups\sf6-migration-20260101-120000.zip --force
 安全策：
 
 - チェックサムが1つでも合わなければ何も変更せず終了します
-- 既存データがあるのに `--force` が無ければ終了します
+- 既存データ（`metabase-data/`、起動中の db、または停止中でも `postgres_data` ボリューム）が
+  あるのに `--force` が無ければ終了します
 - `--force` 時も、リストア前に現在の状態を `backups/` へ自動エクスポートします
-  （秘密なし・モード backup）。止めたい場合だけ `--skip-pre-backup`
+  （秘密なし・モード backup）。db が停止中でもボリュームがあれば一時的に起動して
+  ダンプを取ります。止めたい場合だけ `--skip-pre-backup`
+- アーカイブに秘密ファイルが実際に入っている場合だけ適用します
+  （manifest のフラグではなくファイルの有無で判定）
 - リストア順序は「秘密と metabase-data を配置 → db 起動 → `pg_restore --clean --if-exists`
   → flyway（通常は no-op）→ 件数検証 → サービス起動」です。
   新規PCで `.env` の認証情報で PostgreSQL が初期化されるよう、この順序にしています
 - 外部公開モード（tunnel / discord-bot）も起動したい場合は `--profile-external`
 
+Linux での注意： metabase コンテナが書き込んだ `metabase-data/` は別ユーザー所有になることがあり、
+リストア時の削除／上書きで `Permission denied` になる場合があります。その場合は
+`sudo chown -R $USER metabase-data` してから再実行するか、`sudo` 付きで実行してください。
+
 ### 別PCへの移行手順
 
-1. 移行元で `backup.bat`（移行モード）を実行し、zip を移行先へ渡す
+1. 移行元で `backup.bat --mode migration`（秘密を含む移行モード）を実行し、zip を移行先へ渡す
 2. 移行先でリポジトリを clone し、Docker を入れる
 3. zip を `backups/` に置き、`restore.bat <zip> --force` を実行する
    （新規PCでは既存データが無いため、本来 `--force` は不要だが、metabase-data の
@@ -99,8 +107,8 @@ tools\migration\restore.bat backups\sf6-migration-20260101-120000.zip --force
 
 ## テスト
 
-Docker 不要の単体テスト（環境変数パース、チェックサム、パストラバーサル防止、
-`--dry-run`、改ざん検知）:
+Docker 不要の単体テスト（チェックサム、パストラバーサル防止、
+`--dry-run`、改ざん検知、秘密ファイル欠落時の扱い）:
 
 ```bat
 python tools\migration\test_migration_tools.py

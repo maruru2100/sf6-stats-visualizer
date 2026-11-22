@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,8 @@ SECRET_ENV_PATH = Path(".env")
 SECRET_COOKIE_PATH = Path("scraper/auth/local_cookies.json")
 METABASE_DATA_DIR = Path("metabase-data")
 CONFIG_FILES = [Path("docker-compose.yml"), Path(".env.example")]
+# Named volume of the db service in docker-compose.yml.
+DB_VOLUME_NAME = "postgres_data"
 
 
 def eprint(*args: object) -> None:
@@ -47,6 +50,7 @@ def run_cmd(
     *,
     check: bool = True,
     capture: bool = False,
+    capture_stderr: bool = False,
     stdout_file=None,
     stdin_file=None,
     cwd: Path | None = None,
@@ -58,6 +62,7 @@ def run_cmd(
         [str(c) for c in cmd],
         cwd=str(cwd or REPO_ROOT),
         stdout=stdout_file if stdout_file is not None else (subprocess.PIPE if capture else None),
+        stderr=subprocess.PIPE if capture_stderr else None,
         stdin=stdin_file,
         text=False if stdout_file is not None or stdin_file is not None else True,
     )
@@ -105,6 +110,54 @@ def is_service_running(service: str) -> bool:
     return bool(service_container_id(service))
 
 
+def compose_project_name() -> str:
+    """Resolve the Compose project name (used for volume labels).
+
+    Order: COMPOSE_PROJECT_NAME -> `docker compose config` -> directory
+    name normalised the same way Compose does. The config step fails on a
+    fresh PC without .env, which is fine: there is no volume to find then.
+    """
+    env_name = os.environ.get("COMPOSE_PROJECT_NAME")
+    if env_name:
+        return env_name
+    result = subprocess.run(
+        compose_cmd() + ["config", "--format", "json"],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode == 0:
+        try:
+            name = json.loads(result.stdout).get("name")
+            if name:
+                return str(name)
+        except ValueError:
+            pass
+    return re.sub(r"[^a-z0-9_-]", "", REPO_ROOT.name.lower())
+
+
+def db_volume_exists(volume: str = DB_VOLUME_NAME) -> bool:
+    """True if the db service's named volume exists, even when db is stopped.
+
+    `compose ps -q` only reports running containers, so a stopped db with
+    data in its volume would otherwise look like an empty environment.
+    """
+    project = compose_project_name()
+    result = run_cmd(
+        [
+            "docker", "volume", "ls", "-q",
+            "--filter", f"label=com.docker.compose.project={project}",
+            "--filter", f"label=com.docker.compose.volume={volume}",
+        ],
+        check=False,
+        capture=True,
+    )
+    out = (result.stdout or "").strip() if isinstance(result.stdout, str) else ""
+    return result.returncode == 0 and bool(out)
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -115,20 +168,6 @@ def sha256_file(path: Path) -> str:
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def read_env_value(env_path: Path, key: str, default: str = "") -> str:
-    """Read one KEY=value entry from a .env file (no shell expansion)."""
-    if not env_path.exists():
-        return default
-    for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        if k.strip() == key:
-            return v.strip().strip('"').strip("'")
-    return default
 
 
 def git_commit(repo_root: Path = REPO_ROOT) -> str:
@@ -182,13 +221,6 @@ def safe_join(base: Path, member_name: str) -> Path:
     return target
 
 
-def load_manifest_from_dir(path: Path) -> dict:
-    manifest_path = path / "manifest.json"
-    if not manifest_path.exists():
-        raise ValueError("manifest.json not found in archive")
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
-
-
 def check_format_version(manifest: dict) -> None:
     version = manifest.get("format_version")
     if version != FORMAT_VERSION:
@@ -208,8 +240,3 @@ def warn_if_not_repo_root() -> None:
             f"warning: docker-compose.yml not found under {REPO_ROOT}. "
             "Run the tool from inside the sf6-stats-visualizer repository."
         )
-
-
-def env_or_os(name: str) -> str | None:
-    value = os.environ.get(name)
-    return value if value else None

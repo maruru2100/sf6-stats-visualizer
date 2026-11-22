@@ -4,10 +4,12 @@
 Safety design:
   - Every file in the archive is verified against the SHA256 recorded in
     manifest.json before anything is touched.
-  - If the current environment already has data, --force is required.
+  - If the current environment already has data (metabase-data/, a running
+    db, or an existing postgres_data volume), --force is required.
   - Unless --skip-pre-backup is given, the current state is first exported
     with backup.py (--mode backup --no-secrets) into backups/, so a failed
-    or mistaken restore can be rolled back.
+    or mistaken restore can be rolled back. A stopped db with a volume is
+    started temporarily for this.
   - Archive members are extracted with path-traversal protection.
 
 Secret handling on restore is also option controlled:
@@ -36,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -90,7 +93,13 @@ def verify_and_extract(archive: Path, dest: Path) -> dict:
 
 def wait_for_db(timeout_sec: int = 60) -> None:
     deadline = time.time() + timeout_sec
-    remote = 'pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-sf6_stats}"'
+    # -h 127.0.0.1 on purpose: during first-time initialisation the postgres
+    # image runs a temporary server that only listens on the Unix socket, so
+    # a socket-based pg_isready would succeed too early.
+    remote = (
+        'pg_isready -h 127.0.0.1 -U "${POSTGRES_USER:-postgres}" '
+        '-d "${POSTGRES_DB:-sf6_stats}"'
+    )
     while time.time() < deadline:
         result = common.compose("exec", "-T", "db", "sh", "-c", remote,
                                 check=False, capture=True)
@@ -106,9 +115,20 @@ def check_http(url: str, tries: int = 15) -> bool:
             with urllib.request.urlopen(url, timeout=3) as resp:
                 if resp.status < 500:
                     return True
+        except urllib.error.HTTPError as e:
+            if e.code < 500:
+                return True
         except Exception:
-            time.sleep(2)
+            pass
+        time.sleep(2)
     return False
+
+
+def stderr_text(result: subprocess.CompletedProcess) -> str:
+    err = result.stderr
+    if isinstance(err, bytes):
+        return err.decode("utf-8", errors="replace")
+    return err or ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -124,20 +144,28 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"archive not found: {archive}")
 
     root = common.REPO_ROOT
-    (root / "backups").mkdir(parents=True, exist_ok=True)
-    work_root = Path(tempfile.mkdtemp(prefix=".restore-", dir=str(root / "backups")))
+    if args.dry_run:
+        # Verification only: do not leave a backups/ directory behind.
+        work_root = Path(tempfile.mkdtemp(prefix="sf6-restore-"))
+    else:
+        (root / "backups").mkdir(parents=True, exist_ok=True)
+        work_root = Path(tempfile.mkdtemp(prefix=".restore-", dir=str(root / "backups")))
     try:
         print("Verifying archive and checksums ...")
         manifest = verify_and_extract(archive, work_root)
         includes = manifest.get("includes", {})
+        # Trust the extracted files over the manifest flags: older archives
+        # recorded the requested option even when the file was missing.
+        env_in_archive = (work_root / "secrets" / ".env").is_file()
+        cookies_in_archive = (work_root / "secrets" / "local_cookies.json").is_file()
         plan = {
             "archive": str(archive),
             "created_at": manifest.get("created_at"),
             "mode": manifest.get("mode"),
             "git_commit": manifest.get("git_commit"),
             "includes": includes,
-            "apply_env": apply_env and bool(includes.get("secrets_env")),
-            "apply_cookies": apply_cookies and bool(includes.get("secrets_cookies")),
+            "apply_env": apply_env and env_in_archive,
+            "apply_cookies": apply_cookies and cookies_in_archive,
             "table_counts_expected": manifest.get("table_counts", {}),
             "force": args.force,
             "pre_backup": not args.skip_pre_backup,
@@ -156,18 +184,25 @@ def main(argv: list[str] | None = None) -> int:
         mb_dir = root / common.METABASE_DATA_DIR
         mb_has_data = mb_dir.exists() and any(mb_dir.iterdir())
         db_running = common.is_service_running("db")
-        if (mb_has_data or db_running) and not args.force:
+        db_has_volume = common.db_volume_exists()
+        db_has_data = db_running or db_has_volume
+        if (mb_has_data or db_has_data) and not args.force:
             raise SystemExit(
-                "existing data was found (metabase-data and/or a running db). "
+                "existing data was found (metabase-data, a running db and/or an "
+                f"existing '{common.DB_VOLUME_NAME}' volume). "
                 "Re-run with --force to overwrite it."
             )
 
         # --- Pre-restore backup of the current state ---
-        if not args.skip_pre_backup and (mb_has_data or db_running):
+        if not args.skip_pre_backup and (mb_has_data or db_has_data):
+            if db_has_data and not db_running:
+                print("\ndb is stopped but its volume exists; starting db for the pre-restore backup ...")
+                common.compose("up", "-d", "db")
+                wait_for_db()
             print("\nExporting the current state first (pre-restore backup) ...")
             cmd = [sys.executable, str(Path(__file__).resolve().parent / "backup.py"),
                    "--mode", "backup", "--no-secrets"]
-            if not db_running:
+            if not db_has_data:
                 cmd.append("--skip-db")
             if not mb_has_data:
                 cmd.append("--skip-metabase")
@@ -210,10 +245,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             with open(dump, "rb") as f:
                 result = common.compose("exec", "-T", "db", "sh", "-c", remote,
-                                        check=False, stdin_file=f)
+                                        check=False, stdin_file=f, capture_stderr=True)
+            err_lines = [l for l in stderr_text(result).splitlines() if l.strip()]
+            if err_lines:
+                print("\n".join(err_lines))
             if result.returncode != 0:
-                print("warning: pg_restore returned non-zero. This is common with "
-                      "--clean on a fresh database; verifying row counts next.")
+                n_errors = sum(1 for l in err_lines if "error:" in l.lower())
+                print(f"warning: pg_restore exited with {result.returncode} "
+                      f"({n_errors} error line(s) above). Errors about objects that "
+                      "do not exist yet are harmless on a fresh database; "
+                      "verifying row counts next.")
 
             print("\nRunning flyway migrations (should be a no-op) ...")
             common.compose("up", "flyway", check=False)

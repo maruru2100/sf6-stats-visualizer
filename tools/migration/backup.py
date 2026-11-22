@@ -11,8 +11,8 @@ What is collected (see docs/migration.md):
   - Secrets (optional)    : .env and scraper/auth/local_cookies.json
 
 Secret handling is controlled by command line options (Issue #32):
+  --mode backup      preset: secrets EXCLUDED (routine backup, the default)
   --mode migration   preset: secrets INCLUDED (a migration needs them)
-  --mode backup      preset: secrets EXCLUDED (routine backup)
   --include-secrets / --no-secrets        override the preset for both files
   --include-env / --no-env                override for .env only
   --include-cookies / --no-cookies        override for the cookie file only
@@ -20,7 +20,7 @@ Explicit flags always win over the --mode preset.
 
 Other options:
   --output-dir DIR   where to write the zip (default: backups/)
-  --output-file NAME zip file name (default: sf6-backup-YYYYMMDD-HHMMSS.zip)
+  --output-file NAME zip file name (default: sf6-<mode>-YYYYMMDD-HHMMSS.zip)
   --skip-db          do not dump PostgreSQL
   --skip-metabase    do not copy metabase-data
   --dry-run          print the resolved plan and exit, touching nothing
@@ -56,8 +56,8 @@ def resolve_flag(mode_default: bool, include: bool, exclude: bool) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--mode", choices=["migration", "backup"], default="migration",
-                   help="preset: migration includes secrets, backup excludes them (default: migration)")
+    p.add_argument("--mode", choices=["migration", "backup"], default="backup",
+                   help="preset: backup excludes secrets, migration includes them (default: backup)")
     p.add_argument("--include-secrets", action="store_true", help="include .env and cookies")
     p.add_argument("--no-secrets", action="store_true", help="exclude .env and cookies")
     p.add_argument("--include-env", action="store_true", help="include .env")
@@ -123,8 +123,10 @@ def main(argv: list[str] | None = None) -> int:
             "db": not args.skip_db,
             "metabase": not args.skip_metabase,
             "config": True,
-            "secrets_env": include_env,
-            "secrets_cookies": include_cookies,
+            # Updated below to reflect what was actually copied, so that
+            # restore.py never tries to apply a file that is not there.
+            "secrets_env": False,
+            "secrets_cookies": False,
         },
         "table_counts": {},
         "files": [],
@@ -187,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             if src.exists():
                 secrets_dir.mkdir(exist_ok=True)
                 shutil.copy2(src, secrets_dir / ".env")
+                manifest["includes"]["secrets_env"] = True
             else:
                 print("note: .env not found, nothing to include for --include-env")
         if include_cookies:
@@ -194,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             if src.exists():
                 secrets_dir.mkdir(exist_ok=True)
                 shutil.copy2(src, secrets_dir / "local_cookies.json")
+                manifest["includes"]["secrets_cookies"] = True
             else:
                 print("note: cookie file not found, nothing to include for --include-cookies")
 
