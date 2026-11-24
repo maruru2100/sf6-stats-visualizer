@@ -17,7 +17,7 @@
 - [💾 移行・バックアップ](./migration.md)
   - DB と Metabase データの移行・バックアップ手順。
 - [🏷️ リリース手順](./release.md)
-  - バージョンの付け方とリリース作業の手順。変更履歴はリポジトリ直下の CHANGELOG.md を参照。
+  - バージョンの付け方とリリース作業の手順。変更履歴はリポジトリ直下の [CHANGELOG.md](https://github.com/maruru2100/sf6-stats-visualizer/blob/main/CHANGELOG.md) を参照。
 
 ## 🏗️ ディレクトリ構成
 - `scraper/`: スクレイピングエンジンと REST API（FastAPI）。

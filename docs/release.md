@@ -1,6 +1,6 @@
 # 🏷️ リリース手順
 
-バージョンの付け方と、リリース作業の手順です。変更履歴はリポジトリ直下の `CHANGELOG.md` にあります。
+バージョンの付け方と、リリース作業の手順です。変更履歴はリポジトリ直下の [CHANGELOG.md](https://github.com/maruru2100/sf6-stats-visualizer/blob/main/CHANGELOG.md) にあります。
 
 ## バージョニング (セマンティック バージョニング)
 
