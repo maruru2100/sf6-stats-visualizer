@@ -1,7 +1,6 @@
 import datetime
 import os
 import threading
-import time
 from config import JST, ENV_ERROR
 from logger import write_log
 import services
