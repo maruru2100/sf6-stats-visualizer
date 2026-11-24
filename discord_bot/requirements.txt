@@ -1,6 +1,9 @@
-discord.py
-sqlalchemy
-psycopg2-binary
-pytz
-requests
-playwright
+# バージョン固定 (Issue #38)。更新は Dependabot の PR 経由で行う。
+# 固定値は 2026-11-24 時点で Python 3.10 互換の最新に解決したもの
+# (= 無固定のまま再ビルドした場合に入るバージョンと同一)。
+discord.py==2.7.1
+sqlalchemy==2.0.58
+psycopg2-binary==2.9.13
+pytz==2026.6
+requests==2.34.2
+playwright==1.65.2

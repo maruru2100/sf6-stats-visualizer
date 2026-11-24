@@ -1,0 +1,60 @@
+# Dependabot 設定 (Issue #38)
+# 依存の更新を自動で PR 化する。マージ判断は人間が行い、CI (PR #37) で確認する。
+version: 2
+updates:
+  # --- Python (pip) ---
+  - package-ecosystem: "pip"
+    directory: "/scraper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      scraper-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      frontend-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/discord_bot"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      discord-bot-deps:
+        patterns: ["*"]
+
+  # --- Docker ベースイメージ ---
+  - package-ecosystem: "docker"
+    directory: "/scraper"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  - package-ecosystem: "docker"
+    directory: "/discord_bot"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # --- GitHub Actions ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
