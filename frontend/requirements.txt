@@ -1,3 +1,10 @@
-streamlit
-requests
-pandas
+# バージョン固定 (Issue #38)。
+# 脆弱性修正は Dependabot security updates の PR で受け、それ以外は手動で更新する。
+# 固定値は 2026-11-24 時点で Python 3.10 互換の最新に解決したもの
+# (= 無固定のまま再ビルドした場合に入るバージョンと同一)。
+# Dependabot はリポジトリルートの .python-version (3.10) を見て解決する。
+# pandas は 3.x が、streamlit は 1.66 以降が Python >=3.11 を要求するため、
+# 3.10 ではそれぞれ 2.3.3 / 1.65.0 が上限。
+streamlit==1.65.0
+requests==2.34.2
+pandas==2.3.3
