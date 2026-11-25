@@ -26,6 +26,8 @@
 
 👉 **[SF6 Stats Visualizer オンラインマニュアル](https://maruru2100.github.io/sf6-stats-visualizer/)**
 
+変更履歴は [CHANGELOG.md](CHANGELOG.md)、バージョンの付け方とリリース作業は [リリース手順](docs/release.md) を参照してください。
+
 ---
 
 ## 🛠 テクノロジースタック
