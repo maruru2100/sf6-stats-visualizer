@@ -9,7 +9,7 @@
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-25
+## [0.1.0] - 2026-11-26
 
 初回リリースとして、現行 main の状態に付けるベースライン。
 （タグ `v0.1.0` は本変更のマージ後に付与する）
@@ -23,6 +23,8 @@
 - Discord Bot: `/scan_user` / `/scan_all` によるスキャン操作、`/info` コマンド、`/url` / `/update_url`、`/request` による匿名の要望 (意見箱) 送信と `/show_requests` による一覧確認
 - 管理画面: ターゲットユーザーの管理 (有効/無効、メモ)、実行ログとスクリーンショットの確認、要望管理
 - 移行・バックアップツール (tools/migration): DB と Metabase データのバックアップ / リストア / PC 間移行 (#34)
+- CI: GitHub Actions による軽量 CI (移行ツールの単体テスト、Python 構文チェック、docker compose 設定の検証。Ubuntu / Windows × Python 3.10 / 3.12) と README の CI バッジ (#36)
+- 依存管理: Python 依存 (requirements.txt) のバージョン固定と `.python-version` の追加。脆弱性修正は Dependabot security updates で受ける方針 (#38)
 - ドキュメント: GitHub Pages (セットアップ / 運用 / 分析SQL / 移行 / リリース手順)、変更履歴 (CHANGELOG.md)
 
 [Unreleased]: https://github.com/maruru2100/sf6-stats-visualizer/compare/v0.1.0...HEAD
