@@ -35,6 +35,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # lint 結果は環境に依存しないため、行列のうち 1 セルだけで実行する
+      - name: Ruff (lint)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+        run: |
+          pip install ruff==0.17.6
+          ruff check
+
       - name: Migration tool unit tests
         run: python tools/migration/test_migration_tools.py
 
