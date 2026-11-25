@@ -4,7 +4,6 @@ from discord import app_commands
 import os
 import pytz
 import requests
-import sys
 from sqlalchemy import text
 
 # 共有フォルダからインポート

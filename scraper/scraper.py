@@ -6,7 +6,7 @@ import datetime
 import requests
 from sqlalchemy import text
 from playwright.sync_api import sync_playwright
-from config import COOKIE_PATH, FULL_SCREENSHOT_PATH
+from config import COOKIE_PATH
 from database import engine
 
 TUNNEL_METRICS_URL = "http://sf6_tunnel:2000/metrics"
