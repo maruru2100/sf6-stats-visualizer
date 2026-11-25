@@ -3,6 +3,7 @@
 ストリートファイター6の公式サイト「Buckler's Booty」から戦績データを自動収集し、Metabaseを用いて詳細な勝率分析やMR推移の可視化を行うためのツール一式です。
 
 [![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge)](https://maruru2100.github.io/sf6-stats-visualizer/)
+[![CI](https://github.com/maruru2100/sf6-stats-visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/maruru2100/sf6-stats-visualizer/actions/workflows/ci.yml)
 
 ## 🌟 主な機能
 - **自動データ収集**: Streamlit UIからの手動取得、およびスケジュール設定による定期自動実行。
@@ -24,6 +25,8 @@
 > README と同じ内容を維持するよう更新しています。差異がある場合は README を優先してください。
 
 👉 **[SF6 Stats Visualizer オンラインマニュアル](https://maruru2100.github.io/sf6-stats-visualizer/)**
+
+変更履歴は [CHANGELOG.md](CHANGELOG.md)、バージョンの付け方とリリース作業は [リリース手順](docs/release.md) を参照してください。
 
 ---
 

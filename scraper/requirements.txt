@@ -1,8 +1,13 @@
-playwright
-sqlalchemy
-psycopg2-binary
-schedule
-requests
-fastapi
-uvicorn[standard]
-pytz
+# バージョン固定 (Issue #38)。
+# 脆弱性修正は Dependabot security updates の PR で受け、それ以外は手動で更新する。
+# 固定値は 2026-11-24 時点で Python 3.10 互換の最新に解決したもの
+# (= 無固定のまま再ビルドした場合に入るバージョンと同一)。
+# Dependabot はリポジトリルートの .python-version (3.10) を見て解決する。
+playwright==1.65.2
+sqlalchemy==2.0.58
+psycopg2-binary==2.9.13
+schedule==1.2.2
+requests==2.34.2
+fastapi==0.162.5
+uvicorn[standard]==0.54.0
+pytz==2026.6
