@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
+import merge as merge_tool  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -143,6 +144,102 @@ class TestDryRuns(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('"apply_env": false', result.stdout)
+
+
+def make_merge_archive(path: Path, *, dump_content: bytes = b"abc") -> None:
+    """Write a minimal backup zip that includes a DB dump.
+
+    The manifest records the hash of b"abc" for db.dump; pass a different
+    dump_content to simulate a tampered archive.
+    """
+    manifest = {
+        "format_version": common.FORMAT_VERSION,
+        "tool": "test",
+        "mode": "backup",
+        "created_at": "2026-01-01T00:00:00+09:00",
+        "git_commit": "deadbeef",
+        "includes": {"db": True, "metabase": False, "config": False,
+                     "secrets_env": False, "secrets_cookies": False},
+        "table_counts": {},
+        "files": [
+            {"path": "db.dump", "size": 3,
+             "sha256": common.sha256_bytes(b"abc")},
+        ],
+    }
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("db.dump", dump_content)
+        zf.writestr("manifest.json", json.dumps(manifest))
+
+
+class TestMerge(unittest.TestCase):
+    def test_merge_table_policies(self) -> None:
+        # Existing rows always win, and the decided scope is enforced.
+        self.assertEqual(
+            merge_tool.MERGE_TABLES["player_stats"], ("user_id", "recorded_at")
+        )
+        self.assertEqual(merge_tool.MERGE_TABLES["battle_results"], ("battle_id",))
+        for skipped in ("feature_requests", "system_status", "flyway_schema_history"):
+            self.assertNotIn(skipped, merge_tool.MERGE_TABLES)
+            self.assertIn(skipped, merge_tool.SKIP_TABLES)
+
+    def test_validate_db_name(self) -> None:
+        self.assertEqual(
+            merge_tool.validate_db_name("sf6_stats_merge_staging"),
+            "sf6_stats_merge_staging",
+        )
+        for bad in ("a; DROP DATABASE x", "a b", "1abc", "a-b", ""):
+            with self.assertRaises(ValueError):
+                merge_tool.validate_db_name(bad)
+
+    def test_build_insert_sql(self) -> None:
+        sql = merge_tool.build_insert_sql(
+            "battle_results", ["battle_id", "played_at"], ("battle_id",)
+        )
+        self.assertIn("INSERT INTO battle_results (battle_id, played_at)", sql)
+        self.assertIn("ON CONFLICT (battle_id) DO NOTHING", sql)
+        self.assertIn("battle_id IS NOT NULL", sql)
+
+    def test_build_count_new_sql(self) -> None:
+        sql = merge_tool.build_count_new_sql(
+            "player_stats", ("user_id", "recorded_at")
+        )
+        self.assertIn("NOT EXISTS", sql)
+        self.assertIn("t.user_id = s.user_id", sql)
+        self.assertIn("t.recorded_at = s.recorded_at", sql)
+
+    def test_merge_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            archive = Path(td) / "with-db.zip"
+            make_merge_archive(archive)
+            result = subprocess.run(
+                [sys.executable, str(HERE / "merge.py"), str(archive), "--dry-run"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Merge plan", result.stdout)
+            self.assertIn("--dry-run: archive verified", result.stdout)
+
+    def test_merge_rejects_archive_without_db(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            archive = Path(td) / "no-db.zip"
+            make_sample_archive(archive)
+            result = subprocess.run(
+                [sys.executable, str(HERE / "merge.py"), str(archive), "--dry-run"],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("does not include a database dump", result.stderr)
+
+    def test_merge_rejects_tampered_dump(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            archive = Path(td) / "tampered.zip"
+            make_merge_archive(archive, dump_content=b"evil")
+            result = subprocess.run(
+                [sys.executable, str(HERE / "merge.py"), str(archive), "--dry-run"],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("sha256 mismatch", result.stderr)
 
 
 if __name__ == "__main__":
