@@ -112,6 +112,44 @@ def build_count_new_sql(table: str, conflict: tuple[str, ...]) -> str:
     )
 
 
+def build_merge_script(
+    table: str, columns: list[str], conflict: tuple[str, ...], csv_data: bytes
+) -> bytes:
+    """One psql script: temp table -> \\copy in -> count new -> insert.
+
+    The CSV rows are inlined after the \\copy line and terminated by the
+    end-of-data marker. COPY output already ends with a newline, so the
+    marker must follow the data directly: a blank line in between would be
+    read as a one-field row and fail with "missing data for column".
+    """
+    if csv_data and not csv_data.endswith(b"\n"):
+        csv_data += b"\n"
+    head = (
+        f"CREATE TEMP TABLE merge_src AS SELECT * FROM {table} LIMIT 0;\n"
+        f"\\copy merge_src ({', '.join(columns)}) FROM STDIN WITH (FORMAT csv)\n"
+    )
+    tail = (
+        "\\.\n"
+        + build_count_new_sql(table, conflict)
+        + "\n"
+        + build_insert_sql(table, columns, conflict)
+        + "\n"
+    )
+    return head.encode("utf-8") + csv_data + tail.encode("utf-8")
+
+
+def stdout_text(result: subprocess.CompletedProcess) -> str:
+    """Captured stdout as str.
+
+    common.run_cmd switches to binary mode whenever stdin_file is given
+    (which psql() always does), so captured output arrives as bytes.
+    """
+    out = result.stdout
+    if isinstance(out, bytes):
+        out = out.decode("utf-8", errors="replace")
+    return (out or "").strip()
+
+
 def psql(
     sql: str,
     *,
@@ -160,7 +198,7 @@ def psql(
 
 def psql_value(sql: str, *, db: str | None = None) -> str:
     result = psql(sql, db=db, capture=True)
-    out = (result.stdout or "").strip() if isinstance(result.stdout, str) else ""
+    out = stdout_text(result)
     if result.returncode != 0:
         raise SystemExit(f"psql failed for: {sql}\n{out}")
     return out.splitlines()[0] if out else ""
@@ -173,7 +211,7 @@ def table_columns(db: str | None, table: str) -> list[str]:
         "ORDER BY ordinal_position;"
     )
     result = psql(sql, db=db, capture=True)
-    out = (result.stdout or "").strip() if isinstance(result.stdout, str) else ""
+    out = stdout_text(result)
     if result.returncode != 0:
         raise SystemExit(f"could not read columns of {table}: {out}")
     return [line.strip() for line in out.splitlines() if line.strip()]
@@ -216,25 +254,12 @@ def merge_table(
     if result.returncode != 0:
         raise SystemExit(f"export from staging failed for {table}")
 
-    # One psql session: temp table -> \copy in -> count new -> insert.
-    head = (
-        f"CREATE TEMP TABLE merge_src AS SELECT * FROM {table} LIMIT 0;\n"
-        f"\\copy merge_src ({', '.join(cols)}) FROM STDIN WITH (FORMAT csv)\n"
-    )
-    tail = (
-        "\n\\.\n"
-        + build_count_new_sql(table, conflict)
-        + "\n"
-        + build_insert_sql(table, cols, conflict)
-        + "\n"
-    )
     combined = work_root / f"merge-{table}.combined"
-    with open(combined, "wb") as out:
-        out.write(head.encode("utf-8"))
-        out.write(csv_path.read_bytes())
-        out.write(tail.encode("utf-8"))
+    combined.write_bytes(
+        build_merge_script(table, cols, conflict, csv_path.read_bytes())
+    )
     result = psql("", stdin_file=combined, capture=True)
-    out = (result.stdout or "").strip() if isinstance(result.stdout, str) else ""
+    out = stdout_text(result)
     if result.returncode != 0:
         raise SystemExit(f"merge insert failed for {table}: {out}")
     numbers = [int(line) for line in out.splitlines() if line.strip().isdigit()]
@@ -329,7 +354,11 @@ def main(argv: list[str] | None = None) -> int:
                 check=False, stdin_file=f, capture_stderr=True,
             )
         if result.returncode != 0:
-            raise SystemExit("pg_restore into the staging database failed.")
+            err = restore_tool.stderr_text(result).strip()
+            raise SystemExit(
+                "pg_restore into the staging database failed"
+                + (f":\n{err}" if err else ".")
+            )
 
         # --- Flyway schema versions must match ---
         target_version = flyway_version(None)

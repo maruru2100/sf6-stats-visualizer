@@ -207,6 +207,61 @@ class TestMerge(unittest.TestCase):
         self.assertIn("t.user_id = s.user_id", sql)
         self.assertIn("t.recorded_at = s.recorded_at", sql)
 
+    def test_build_merge_script_has_no_blank_line_before_eod(self) -> None:
+        # A blank line between the CSV rows and "\." is read by COPY as a
+        # one-field row and fails with "missing data for column".
+        csv = b"u1,A\nu2,B\n"
+        script = merge_tool.build_merge_script(
+            "target_users", ["user_code", "player_name"], ("user_code",), csv
+        )
+        self.assertIn(
+            b"\\copy merge_src (user_code, player_name) FROM STDIN WITH (FORMAT csv)\n"
+            + csv + b"\\.\n",
+            script,
+        )
+        self.assertNotIn(b"\n\n\\.", script)
+        # An empty source table must also put "\." right after the \copy line.
+        empty = merge_tool.build_merge_script(
+            "target_users", ["user_code"], ("user_code",), b""
+        )
+        self.assertIn(b"FROM STDIN WITH (FORMAT csv)\n\\.\n", empty)
+
+    def test_psql_handles_bytes_stdout(self) -> None:
+        # psql() always feeds the script via stdin_file, which makes
+        # common.run_cmd capture stdout as bytes rather than str.
+        calls: list[list[str]] = []
+
+        def fake_compose(*args, **kwargs):
+            calls.append(list(args))
+            return subprocess.CompletedProcess(
+                args=list(args), returncode=0, stdout=b"8\n", stderr=None
+            )
+
+        original = merge_tool.common.compose
+        merge_tool.common.compose = fake_compose
+        try:
+            self.assertEqual(merge_tool.flyway_version(None), "8")
+            self.assertEqual(merge_tool.flyway_version(merge_tool.STAGING_DB), "8")
+        finally:
+            merge_tool.common.compose = original
+        self.assertEqual(len(calls), 2)
+        self.assertIn("-d sf6_stats_merge_staging", calls[1][-1])
+
+    def test_table_columns_from_bytes_stdout(self) -> None:
+        def fake_compose(*args, **kwargs):
+            return subprocess.CompletedProcess(
+                args=list(args), returncode=0,
+                stdout=b"id\nuser_code\nplayer_name\n", stderr=None,
+            )
+
+        original = merge_tool.common.compose
+        merge_tool.common.compose = fake_compose
+        try:
+            cols = merge_tool.table_columns(None, "target_users")
+        finally:
+            merge_tool.common.compose = original
+        self.assertEqual(cols, ["id", "user_code", "player_name"])
+
     def test_merge_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             archive = Path(td) / "with-db.zip"
