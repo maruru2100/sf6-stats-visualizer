@@ -1,4 +1,4 @@
-# 移行・バックアップツール（Issue #32）
+# 移行・バックアップツール（Issue #32 / #44）
 
 別PCの Docker 環境へ移行する時と、日常のバックアップ用に、Git 管理外のデータを
 1つの zip にまとめ／戻すためのツールです。Python 標準ライブラリのみで動作します。
@@ -90,6 +90,43 @@ tools\migration\restore.bat backups\sf6-migration-20260101-120000.zip --force
 Linux での注意： metabase コンテナが書き込んだ `metabase-data/` は別ユーザー所有になることがあり、
 リストア時の削除／上書きで `Permission denied` になる場合があります。その場合は
 `sudo chown -R $USER metabase-data` してから再実行するか、`sudo` 付きで実行してください。
+
+### マージ（差分挿入）
+
+稼働中のシステムに、別システムで取得したデータを合流させます（Issue #44）。
+リストアと違い、既存データは消えず、取り込み先に無いデータだけが入ります。
+
+```bat
+rem 取り込み元システムでバックアップを作成し、zip を取り込み先へ渡す
+tools\migration\backup.bat
+
+rem 取り込み先で、まず検証だけ
+tools\migration\merge.bat backups\sf6-backup-20260101-120000.zip --dry-run
+
+rem 本番マージ
+tools\migration\merge.bat backups\sf6-backup-20260101-120000.zip
+```
+
+取り込みルール（すべて「既存＝取り込み先が優先」）:
+
+| テーブル | キー | 備考 |
+|---|---|---|
+| `battle_results` | `battle_id` | 無い試合だけ挿入 |
+| `player_stats` | `(user_id, recorded_at)` | 無い日だけ挿入。両方にある日は取り込み先の値を保持 |
+| `target_users` | `user_code` | 無いユーザーだけ挿入（メモ・有効フラグは取り込み先を保持） |
+| `scraper_config` | `key` | 無いキーだけ挿入 |
+| `system_status` / `feature_requests` | - | 対象外 |
+| Metabase | - | 対象外（合体できないため） |
+
+仕組みと安全策：
+
+- `id`（SERIAL）はシステムごとに独立採番のため転送しません。新規行の id は
+  取り込み先のシーケンスが振ります
+- dump は一時的なステージング DB（`sf6_stats_merge_staging`）に展開してから
+  テーブルごとに転送し、ステージング DB は最後に必ず削除します
+- 両システムの Flyway バージョンが一致しない場合は、挿入前に中断します
+- 実行前に現在の DB を自動エクスポートします（`--skip-pre-backup` で省略可）
+- 他のサービスは停止・再起動しません（db が止まっていれば db だけ起動します）
 
 ### 別PCへの移行手順
 
